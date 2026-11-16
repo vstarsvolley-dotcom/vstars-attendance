@@ -131,17 +131,21 @@
     try { setPwFlag = window.sessionStorage.getItem('vstars_set_password') === '1'; } catch (e) {}
     if (hash.indexOf('type=recovery') !== -1 || hash.indexOf('type=invite') !== -1 || setPwFlag) {
       try { window.sessionStorage.setItem('vstars_set_password', '1'); } catch (e) {}
-      var api = getApi();
-      if (api && api.getAdminSession) {
-        api.getAdminSession().then(function () {
-          window.location.hash = '#/admin';
-        }).catch(function () {
-          window.location.hash = '#/admin';
-        });
-      } else {
-        window.location.hash = '#/admin';
+      // パスワード設定画面へ誘導する。すでにその画面の hash なら
+      // 下の通常ルーティングへ進んで描画する (ここで return すると描画されない)。
+      if (hash !== '#/admin/set-password') {
+        var api = getApi();
+        if (api && api.getAdminSession) {
+          api.getAdminSession().then(function () {
+            window.location.hash = '#/admin/set-password';
+          }).catch(function () {
+            window.location.hash = '#/admin/set-password';
+          });
+        } else {
+          window.location.hash = '#/admin/set-password';
+        }
+        return;
       }
-      return;
     }
     var path = hash.replace(/^#/, '').split('?')[0] || '/';
     if (path === '') { path = '/'; }
