@@ -158,6 +158,9 @@
       view.appendChild(list);
     }
 
+    // プッシュ通知 (繰り上がり/待ち戻りのお知らせ)
+    renderPushSection(view);
+
     var logoutBtn = document.createElement('button');
     logoutBtn.type = 'button';
     logoutBtn.className = 'btn btn-ghost btn-large';
@@ -176,6 +179,134 @@
       window.location.hash = '#/login';
     });
     view.appendChild(logoutBtn);
+  }
+
+  // ---- プッシュ通知の登録/解除 ----
+  // 対応ブラウザのみ表示する。iPhone はホーム画面に追加した PWA でのみ
+  // 届く (iOS 16.4+)。LINE 内ブラウザでは届かないため、その旨も表示する。
+  function pushSupported() {
+    return ('serviceWorker' in window.navigator)
+      && ('PushManager' in window)
+      && ('Notification' in window)
+      && !!(window.VSTARS_CONFIG && window.VSTARS_CONFIG.VAPID_PUBLIC_KEY);
+  }
+
+  function isLineBrowser() {
+    var ua = (window.navigator && window.navigator.userAgent) || '';
+    return /Line\//i.test(ua);
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    var padding = '='.repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var rawData = window.atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
+    return outputArray;
+  }
+
+  function arrayBufferToBase64(buf) {
+    var bytes = new Uint8Array(buf);
+    var bin = '';
+    for (var i = 0; i < bytes.length; i++) { bin += String.fromCharCode(bytes[i]); }
+    return window.btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  async function renderPushSection(view) {
+    var sec = document.createElement('h2');
+    sec.className = 'section-title';
+    sec.textContent = 'プッシュ通知';
+    view.appendChild(sec);
+
+    var box = document.createElement('div');
+    box.className = 'push-box';
+    view.appendChild(box);
+
+    if (!pushSupported()) {
+      var ng = document.createElement('p');
+      ng.className = 'muted';
+      ng.textContent = 'このブラウザはプッシュ通知に対応していません。Safari / Chrome で開き直してください。';
+      box.appendChild(ng);
+      return;
+    }
+
+    if (isLineBrowser()) {
+      var line = document.createElement('p');
+      line.className = 'muted';
+      line.textContent = 'LINE の中で開いている場合は通知が届きません。Safari / Chrome で開いてホーム画面に追加してください。';
+      box.appendChild(line);
+    }
+
+    var status = document.createElement('p');
+    status.className = 'muted';
+    status.textContent = '確認中…';
+    box.appendChild(status);
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-navy';
+    btn.style.marginTop = '8px';
+    btn.disabled = true;
+    box.appendChild(btn);
+
+    var reg;
+    try {
+      reg = await window.navigator.serviceWorker.ready;
+    } catch (e) {
+      status.textContent = 'サービスワーカーが使えません。';
+      return;
+    }
+    var sub = null;
+    try { sub = await reg.pushManager.getSubscription(); } catch (e) { sub = null; }
+
+    function refresh() {
+      if (sub) {
+        status.textContent = '通知を受け取る設定になっています。繰り上がり・待ち戻りのときにお知らせします。';
+        btn.textContent = '通知を止める';
+      } else if (window.Notification.permission === 'denied') {
+        status.textContent = '通知がブロックされています。ブラウザの設定から許可してください。';
+        btn.textContent = '通知を受け取る';
+      } else {
+        status.textContent = '繰り上がり・待ち戻りのとき、この端末に通知を送ります。';
+        btn.textContent = '通知を受け取る';
+      }
+      btn.disabled = false;
+    }
+    refresh();
+
+    btn.addEventListener('click', async function () {
+      btn.disabled = true;
+      try {
+        if (sub) {
+          try { await sub.unsubscribe(); } catch (e) {}
+          try { await Api().deletePushSubscription(sub.endpoint); } catch (e) {}
+          sub = null;
+          UI().toast('プッシュ通知を止めました。');
+        } else {
+          var perm = await window.Notification.requestPermission();
+          if (perm !== 'granted') {
+            UI().toast('通知が許可されませんでした。');
+            refresh();
+            return;
+          }
+          var newSub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(window.VSTARS_CONFIG.VAPID_PUBLIC_KEY)
+          });
+          var key = newSub.getKey('p256dh');
+          var authKey = newSub.getKey('auth');
+          await Api().savePushSubscription(
+            newSub.endpoint,
+            key ? arrayBufferToBase64(key) : '',
+            authKey ? arrayBufferToBase64(authKey) : '');
+          sub = newSub;
+          UI().toast('プッシュ通知を受け取る設定にしました。');
+        }
+      } catch (e) {
+        UI().toast('プッシュ通知の設定に失敗しました。' + (e && e.message ? ' ' + e.message : ''));
+      }
+      refresh();
+    });
   }
 
   window.VstarsMemberMyPage = { renderMyPage: renderMyPage };

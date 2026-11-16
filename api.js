@@ -155,6 +155,15 @@
       return callRpc('ack_status_change', { p_token: getToken(), p_registration_id: registrationId });
     },
     getMyPage: function () { return callRpc('get_my_page', { p_token: getToken() }); },
+    savePushSubscription: function (endpoint, p256dh, auth) {
+      return callRpc('member_save_push_subscription', {
+        p_token: getToken(), p_endpoint: endpoint, p_p256dh: p256dh,
+        p_auth: auth, p_user_agent: deviceLabel()
+      });
+    },
+    deletePushSubscription: function (endpoint) {
+      return callRpc('member_delete_push_subscription', { p_token: getToken(), p_endpoint: endpoint });
+    },
     getPracticeRoster: function (practiceId) {
       return callRpc('get_practice_roster', { p_token: getToken(), p_practice_id: practiceId });
     },
