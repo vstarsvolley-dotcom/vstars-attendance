@@ -176,7 +176,9 @@
         okLabel: 'ログアウトする'
       });
       if (!ok) { return; }
-      Api().clearSession();
+      // サーバー側でデバイスを取り消してから (C13) ローカルセッションを消す。
+      // Api().logout() は RPC が失敗してもローカルセッションを消す。
+      await Api().logout();
       try { window.localStorage.removeItem('vstars_line_name'); } catch (e) {}
       window.VstarsMemberApp.setHeaderUser('');
       window.location.hash = '#/login';
@@ -296,17 +298,24 @@
             userVisibleOnly: true,
             applicationServerKey: urlBase64ToUint8Array(window.VSTARS_CONFIG.VAPID_PUBLIC_KEY)
           });
-          var key = newSub.getKey('p256dh');
-          var authKey = newSub.getKey('auth');
-          await Api().savePushSubscription(
-            newSub.endpoint,
-            key ? arrayBufferToBase64(key) : '',
-            authKey ? arrayBufferToBase64(authKey) : '');
+          try {
+            var key = newSub.getKey('p256dh');
+            var authKey = newSub.getKey('auth');
+            await Api().savePushSubscription(
+              newSub.endpoint,
+              key ? arrayBufferToBase64(key) : '',
+              authKey ? arrayBufferToBase64(authKey) : '');
+          } catch (saveErr) {
+            // サーバーへの保存に失敗したのにブラウザ側の購読だけ残すと
+            // 通知が届かない「幽霊購読」になるため、購読を破棄する。
+            try { await newSub.unsubscribe(); } catch (e2) {}
+            throw saveErr;
+          }
           sub = newSub;
           UI().toast('プッシュ通知を受け取る設定にしました。');
         }
       } catch (e) {
-        UI().toast('プッシュ通知の設定に失敗しました。' + (e && e.message ? ' ' + e.message : ''));
+        UI().toast('プッシュ通知の設定に失敗しました。' + UI().friendlyError(e));
       }
       refresh();
     });

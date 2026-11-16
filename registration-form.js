@@ -114,6 +114,7 @@ apiKeyI.autocomplete = 'off';
 }
 
 var consentLabel = document.createElement('label');
+consentLabel.className = 'checkbox-field';
 var consentChk = document.createElement('input');
 consentChk.type = 'checkbox';
 consentChk.required = true;
@@ -193,10 +194,16 @@ view.appendChild(back);
 UI().toast('登録申請を送信しました。');
 } catch (ex) {
 var msg = ex && ex.message ? ex.message : '';
-if (msg.indexOf('duplicate_request') !== -1) {
-errEl.textContent = '同じ名前の申請がすでに承認待ちです。承認されるまでお待ちください。';
-} else if (msg.indexOf('already_member') !== -1) {
-errEl.textContent = '同じ名前の方がすでにメンバーとして登録されています。管理者にお問い合わせください。';
+// 重複エラーは SQL 14 で duplicate_request に統一された (R3 C4)。
+// 申請者には「申請済み」か「登録済み」かを区別しない中立の文言にする
+// (区別するとメンバー名の有無が推測できてしまうため)。
+if (msg.indexOf('duplicate_request') !== -1 || msg.indexOf('already_member') !== -1) {
+errEl.textContent = '同じ名前の申請または登録がすでにあります。管理者にお問い合わせください。';
+} else if (msg.indexOf('23505') !== -1 || msg.indexOf('unique') !== -1) {
+// 同時送信の競合で一意制約に当たった場合の受け皿。
+errEl.textContent = '同じ名前の申請または登録がすでにあります。管理者にお問い合わせください。';
+} else if (msg.indexOf('too_many_requests') !== -1) {
+errEl.textContent = '短時間に何度も申請されています。しばらく待ってからもう一度お試しください。';
 } else {
 errEl.textContent = '送信に失敗しました。' + (msg ? ' ' + msg : '');
 }

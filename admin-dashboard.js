@@ -137,10 +137,11 @@ wrap.appendChild(prSec);
 try {
 var practices = await Api().adminListPractices();
 var list = Array.isArray(practices)? practices: [];
-var today = new Date();
-today.setHours(0, 0, 0, 0);
+// 「今日」は JST の日付文字列で比較する。new Date() のローカル日付だと
+// 端末が日本国外のときに前日/翌日ずれて今日の練習が消える。
+var todayJst = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 var upcoming = list
-.filter(function (p) { return!p.is_cancelled && (!p.practice_date || new Date(p.practice_date) >= today);})
+.filter(function (p) { return!p.is_cancelled && (!p.practice_date || String(p.practice_date).slice(0, 10) >= todayJst);})
 .sort(function (a, b) { return String(a.practice_date).localeCompare(String(b.practice_date));})
 .slice(0, 5);
 prBody.innerHTML = '';

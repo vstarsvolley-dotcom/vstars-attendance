@@ -82,7 +82,8 @@
     };
   }
 
-  // 繰り上がり/繰り下がり通知バナー。確認されるまで表示し続ける。
+  // 繰り上がり/待ち戻し通知バナー。確認されるまで表示し続ける。
+  // ラベルは管理画面と統一して「待ち戻し」(旧: 繰り下がり)。
   async function refreshBanner() {
     var banner = document.getElementById('notice-banner');
     var textEl = document.getElementById('notice-banner-text');
@@ -98,7 +99,7 @@
         .filter(function (n) { return !n.seenAt && !n.acknowledged; });
       if (currentNotices.length === 0) { banner.hidden = true; return; }
       var n = currentNotices[0];
-      var label = n.kind === 'demotion' ? '繰り下がり' : '繰り上がり';
+      var label = n.kind === 'demotion' ? '待ち戻し' : '繰り上がり';
       var dateText = n.practiceDate ? UI_.fmtDateTimeJST(n.practiceDate, n.startTime, n.endTime) : '';
       textEl.textContent = n.message
         || (dateText + (n.venue ? ' ' + n.venue : '') + ' の練習で' + label + 'になりました。');

@@ -162,11 +162,14 @@
       return { input: input, err: err };
     }
 
-    var pin1 = pinField(pinMode === 'set' ? '新しい PIN（4桁の数字）' : 'PIN（4桁の数字）', 'pin1', 'current-password');
+    // PIN はパスワードではないため、ブラウザのパスワード自動入力
+    // (保存済みパスワードによる上書き) を避ける。'one-time-code' は
+    // パスワードマネージャの対象外になり、SMS コード欄として扱われる。
+    var pin1 = pinField(pinMode === 'set' ? '新しい PIN（4桁の数字）' : 'PIN（4桁の数字）', 'pin1', 'one-time-code');
     var pin2 = null;
     var realNameF = null;
     if (pinMode === 'set') {
-      pin2 = pinField('PIN の確認（もう一度入力）', 'pin2', 'new-password');
+      pin2 = pinField('PIN の確認（もう一度入力）', 'pin2', 'one-time-code');
       // 本人確認 (2026-11-16 脆弱性診断): 会員番号だけでは他人の PIN を
       // 設定できてしまうため、登録時の本名も入力してもらう。
       realNameF = (function () {
@@ -263,7 +266,11 @@
         UI().toast('ログインしました。');
         window.location.hash = '#/practices';
       } catch (err) {
-        if (isLockedError(err)) {
+        // real_name_rate_limited は isLockedError (rate_limited を含む)
+        // より先に判定する。先に判定しないと PIN のロック文言が出てしまう。
+        if ((err && err.code) === 'real_name_rate_limited' || /real_name_rate_limited/i.test((err && err.message) || '')) {
+          msg.textContent = '本名の確認に何度も失敗したため、一時的にロックされています。しばらく待ってからもう一度お試しください。';
+        } else if (isLockedError(err)) {
           // エラーコードをそのまま出さず日本語で伝える。
           if ((err && err.code) === 'pin_rate_limited' || /rate_limited/i.test((err && err.message) || '')) {
             msg.textContent = 'PIN の入力間違いが続いたため、一時的にロックされています。しばらく待ってからもう一度お試しください。';

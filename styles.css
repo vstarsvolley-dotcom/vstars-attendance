@@ -59,8 +59,9 @@ a { color: var(--navy); }
   font-size: 20px;
   text-decoration: none;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
-.header-sub { color: var(--yellow); font-size: 14px; font-weight: 700; }
+.header-sub { color: var(--yellow); font-size: 14px; font-weight: 700; white-space: nowrap; }
 .header-spacer { flex: 1; }
 .header-user {
   color: var(--white);
@@ -77,8 +78,21 @@ a { color: var(--navy); }
   text-decoration: none;
   padding: 6px 8px;
   border-radius: 8px;
+  white-space: nowrap;
 }
 .header-nav a[aria-current="page"] { background: var(--yellow); color: var(--navy); font-weight: 700; }
+
+/* ---- 狭い画面 (390px級): ヘッダーの折り返し防止 ---- */
+/* ログイン後のヘッダー (タイトル + 会員名 + 3リンク) が 390px で
+ * 「出/欠」の縦割れ・会員名の「テスト…」・リンクの2行化を起こしていたため、
+ * 会員名は狭い画面では表示しない (マイページで確認できる)。
+ * タイトルとリンクは折り返さない。 */
+@media (max-width: 560px) {
+  .header-inner { padding: 8px 12px; gap: 6px; }
+  .brand { font-size: 18px; }
+  .header-user { display: none; }
+  .header-nav a { padding: 6px 6px; }
+}
 
 /* ---- オフライン表示 ---- */
 .offline-indicator {
@@ -179,7 +193,7 @@ a { color: var(--navy); }
   padding: 14px 24px;
   flex: 1;
 }
-.btn-small { padding: 8px 12px; font-size: 14px; min-height: 40px; }
+.btn-small { padding: 8px 12px; font-size: 14px; min-height: 44px; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ---- まとめ申し込みバー ---- */
@@ -195,9 +209,14 @@ a { color: var(--navy); }
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
-.bulk-count { flex: 1; font-weight: 700; }
+/* 件数カウンタは幅を確保して折り返さない。従来は .btn-large の width:100%
+ * に押し潰され、「2件選択中」が1文字ずつ縦に折り返されていた (390px)。
+ * ボタンは残り幅を使い、極端に狭い画面では2行目にきれいに折り返す。 */
+.bulk-count { flex: 0 0 auto; font-weight: 700; white-space: nowrap; }
 .bulk-bar .btn { flex-shrink: 0; }
+.bulk-bar .btn-large { width: auto; flex: 1 1 auto; min-width: 0; }
 
 /* ---- ボトムシート / ダイアログ ---- */
 .sheet-backdrop {
@@ -344,6 +363,9 @@ table.data tr:last-child td { border-bottom: none; }
 .badge-yellow { background: var(--yellow); color: var(--navy); }
 .badge-green { background: #DCF2E3; color: var(--green); }
 .badge-red { background: #FDE8E8; color: var(--danger); }
+
+/* 退会済みメンバーのカードは少し薄くして現役と区別する */
+.card-withdrawn { opacity: 0.72; }
 .roster-list { list-style: none; margin: 0; padding: 0; }
 .roster-list li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; }
 .roster-list li:last-child { border-bottom: none; }

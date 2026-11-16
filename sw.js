@@ -5,13 +5,14 @@
  */
 'use strict';
 
-var CACHE_NAME = 'vstars-v13';
+var CACHE_NAME = 'vstars-v14';
 var CORE_ASSETS = [
   './',
   './index.html',
   './styles.css',
   './manifest.json',
   './config.js',
+  './vendor/supabase.min.js',
   './api.js',
   './ui.js',
   './member-app.js',
@@ -85,7 +86,15 @@ self.addEventListener('notificationclick', function (event) {
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clients) {
       for (var i = 0; i < clients.length; i++) {
-        if ('focus' in clients[i]) { return clients[i].focus(); }
+        // 通知の URL が開いているタブはその URL へ遷移させてから前面化する。
+        // 従来はフォーカスだけで遷移しなかったため、練習詳細が開かれなかった。
+        if ('focus' in clients[i]) {
+          if (clients[i].url === fullUrl) { return clients[i].focus(); }
+          if ('navigate' in clients[i]) {
+            return clients[i].navigate(fullUrl).then(function (c) { return c.focus(); });
+          }
+          return clients[i].focus();
+        }
       }
       if (self.clients.openWindow) { return self.clients.openWindow(fullUrl); }
       return undefined;

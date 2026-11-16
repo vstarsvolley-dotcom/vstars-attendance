@@ -37,8 +37,14 @@
     return _isOwnerCache;
   }
 
+  function isWithdrawn(m) {
+    // admin_list_members は status ('active'/'withdrawn') を返す。
+    // 旧版は is_withdrawn フラグだったため両方に対応する。
+    return m.status === 'withdrawn' || !!m.is_withdrawn;
+  }
+
   function statusLabel(m) {
-    if (m.is_withdrawn) { return '退会済み'; }
+    if (isWithdrawn(m)) { return '退会済み'; }
     if (m.regular_since) { return '既存'; }
     return '新規';
   }
@@ -96,6 +102,23 @@
     searchForm.appendChild(searchBtn);
     view.appendChild(searchForm);
 
+    // 退会済みの表示フィルタ (既定: 現役のみ)。退会済みは区別して表示する。
+    var filterRow = document.createElement('div');
+    filterRow.className = 'field';
+    var filterLabel = document.createElement('label');
+    filterLabel.textContent = '表示';
+    filterRow.appendChild(filterLabel);
+    var filterSel = document.createElement('select');
+    [['active', '現役のみ'], ['withdrawn', '退会済みのみ'], ['all', 'すべて']].forEach(function (kv) {
+      var o = document.createElement('option');
+      o.value = kv[0];
+      o.textContent = kv[1];
+      filterSel.appendChild(o);
+    });
+    filterSel.addEventListener('change', function () { refreshList(q.value.trim()); });
+    filterRow.appendChild(filterSel);
+    view.appendChild(filterRow);
+
     var listEl = document.createElement('div');
     view.appendChild(listEl);
 
@@ -109,17 +132,38 @@
         return;
       }
       members = Array.isArray(members) ? members : [];
+      // 退会済みの絞り込み (既定は現役のみ)。隠れた退会済みの件数を注記する。
+      var wf = filterSel.value;
+      var shown = members.filter(function (m) {
+        var w = isWithdrawn(m);
+        if (wf === 'withdrawn') { return w; }
+        if (wf === 'all') { return true; }
+        return !w;
+      });
+      var hiddenWithdrawn = members.length - shown.length;
       listEl.innerHTML = '';
-      if (members.length === 0) {
+      if (wf === 'active' && hiddenWithdrawn > 0) {
+        var note = document.createElement('p');
+        note.className = 'muted';
+        note.textContent = '退会済みのメンバー ' + hiddenWithdrawn + '名は表示していません。「表示」で切り替えできます。';
+        listEl.appendChild(note);
+      }
+      if (shown.length === 0) {
         UI().showEmpty(listEl, '該当するメンバーはいません。');
         return;
       }
-      members.forEach(function (m) {
+      shown.forEach(function (m) {
         var card = document.createElement('div');
-        card.className = 'practice-card';
+        card.className = 'practice-card' + (isWithdrawn(m) ? ' card-withdrawn' : '');
         var h = document.createElement('h3');
         h.textContent = (m.line_name || '-') + ' (No.' + (m.member_no !== undefined ? m.member_no : '-') + ')';
         card.appendChild(h);
+        if (isWithdrawn(m)) {
+          var wdBadge = document.createElement('span');
+          wdBadge.className = 'badge badge-red';
+          wdBadge.textContent = '退会済み';
+          card.appendChild(wdBadge);
+        }
         var p = document.createElement('p');
         p.textContent = '性別: ' + UI().genderLabel(m.gender) + ' ｜ ステータス: ' + statusLabel(m)
           + (m.on_leave ? ' ｜ 休会中' : '')
@@ -148,12 +192,15 @@
         addBtn(actions, '常連にする', 'btn-ghost', function () { showRegularForm(m, detail, function () { refreshList(q.value.trim()); }); });
         if (isOwner) {
           addBtn(actions, '管理者にする', 'btn-ghost', function () { showInviteForm(m, detail, function () { refreshList(q.value.trim()); }); });
-          addBtn(actions, '退会させる', 'btn-ghost', async function () {
-            var ok = await UI().confirmSheet({ title: '退会させますか？', body: 'このメンバーは退会扱いになり、今後の申込はすべてキャンセルされます。空いた枠はキャンセル待ちの方に繰り上がります。データは 1 年後に削除されます。この操作は取り消せません。', okLabel: '退会させる', danger: true });
-            if (!ok) { return; }
-            try { await Api().adminConfirmWithdrawal(m.member_no, '管理者による退会'); UI().toast('退会させました。'); refreshList(q.value.trim()); }
-            catch (e) { UI().toast('退会に失敗しました。' + (e && e.message ? ' ' + e.message : '')); }
-          });
+          // 退会済みには「退会させる」を出さない。「削除する」は残す。
+          if (!isWithdrawn(m)) {
+            addBtn(actions, '退会させる', 'btn-ghost', async function () {
+              var ok = await UI().confirmSheet({ title: '退会させますか？', body: 'このメンバーは退会扱いになり、今後の申込はすべてキャンセルされます。空いた枠はキャンセル待ちの方に繰り上がります。データは 1 年後に削除されます。この操作は取り消せません。', okLabel: '退会させる', danger: true });
+              if (!ok) { return; }
+              try { await Api().adminConfirmWithdrawal(m.member_no, '管理者による退会'); UI().toast('退会させました。'); refreshList(q.value.trim()); }
+              catch (e) { UI().toast('退会に失敗しました。' + (e && e.message ? ' ' + e.message : '')); }
+            });
+          }
           addBtn(actions, '削除する', 'btn-ghost', async function () {
             var ok = await UI().confirmSheet({ title: 'メンバーを削除しますか？', body: '出欠履歴のないメンバーのみ削除できます。登録情報・申込・PIN・デバイスがすべて削除され、取り消せません。出欠履歴がある場合は退会をご利用ください。', okLabel: '削除する', danger: true });
             if (!ok) { return; }
@@ -483,7 +530,7 @@
             refresh();
           } catch (e) {
             var msg = e && e.message ? e.message : '';
-            if (msg.indexOf('already_member') !== -1) {
+            if (msg.indexOf('already_member') !== -1 || msg.indexOf('duplicate_request') !== -1) {
               UI().toast('承認できませんでした。同じ名前の方がすでにメンバーとして登録されています。既存のメンバーをご確認のうえ、この申請は却下してください。');
             } else {
               UI().toast('承認に失敗しました。' + (msg ? ' ' + msg : ''));

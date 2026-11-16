@@ -79,6 +79,11 @@
       e.preventDefault();
       var year = parseInt(yearI.value, 10);
       var month = parseInt(monthI.value, 10);
+      // number 入力は min/max を超えても送信できてしまうため JS で範囲確認する。
+      if (!year || year < 2020 || year > 2100 || !month || month < 1 || month > 12) {
+        statsResult.innerHTML = '<p class="danger-text">年は 2020〜2100、月は 1〜12 の範囲で入力してください。</p>';
+        return;
+      }
       statsResult.innerHTML = '<p>読み込み中…</p>';
       try {
         var st = await Api().adminMonthlyStats(year, month);
@@ -288,7 +293,14 @@
     var chkLabel = document.createElement('label');
     var chk = document.createElement('input');
     chk.type = 'checkbox';
+    // 現在の設定値を読んで初期表示する。従来は常に ON 表示で、
+    // OFF にしていた管理者が「保存」を押すだけで ON に戻ってしまった。
     chk.checked = true;
+    chk.disabled = true;
+    Api().getMyEmailNotify().then(function (v) {
+      chk.checked = !!v;
+      chk.disabled = false;
+    }, function () { chk.disabled = false; });
     chkLabel.appendChild(chk);
     chkLabel.appendChild(document.createTextNode(' 通知メールを受け取る'));
     notifyForm.appendChild(chkLabel);
@@ -302,7 +314,7 @@
       try {
         await Api().setMyEmailNotify(chk.checked);
         UI().toast('通知設定を保存しました。');
-      } catch (ex) { UI().toast('保存に失敗しました。' + (ex && ex.message ? ' ' + ex.message : '')); }
+      } catch (ex) { UI().toast('保存に失敗しました。' + UI().friendlyError(ex)); }
     });
     settingsSec.appendChild(notifyForm);
     var about = document.createElement('p');

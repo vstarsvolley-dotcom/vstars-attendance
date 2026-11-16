@@ -9,7 +9,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" href="icon-192.png" type="image/png">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<!-- supabase-js は同梱 (vendor/)。CDN のフローティングタグは使わない (R2-8)。 -->
+<script src="./vendor/supabase.min.js" defer></script>
 <script src="config.js" defer></script>
 <script src="api.js" defer></script>
 <script src="ui.js" defer></script>

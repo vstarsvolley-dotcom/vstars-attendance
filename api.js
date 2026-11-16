@@ -133,7 +133,26 @@
         p_member_no: memberNo, p_pin: pin,
         p_device_token: api.ensureDeviceToken(), p_device_label: deviceLabel(),
         p_real_name: realName || null
+      }).then(function (res) {
+        // 本名チェックの失敗は verifyPin と同じく ok:false で返る (SQL 14)。
+        // そのまま返すとログイン成功扱いになるため、ここで throw する。
+        if (res && res.ok === false) {
+          var code = res.error || 'real_name_mismatch';
+          var e = new Error(code);
+          e.code = code;
+          throw e;
+        }
+        return res;
       });
+    },
+    // ログアウト: サーバー側で当該デバイス行を取り消してから (C13)、
+    // ローカルのセッションを消す。サーバー呼び出しが失敗しても
+    // ローカルセッションは必ず消す (閉じ込め防止)。
+    logout: function () {
+      var token = getToken();
+      var done = function () { clearSession(); };
+      if (!token) { done(); return Promise.resolve({ ok: true }); }
+      return callRpc('member_logout', { p_token: token }).then(done, done);
     },
     verifyPin: function (memberNo, pin) {
       return callRpc('verify_pin', {
@@ -364,6 +383,12 @@
     adminMailStatus: function () { return callRpc('admin_mail_status', {}); },
     setMyEmailNotify: function (enabled) {
       return callRpc('set_my_email_notify', { p_enabled: !!enabled });
+    },
+    getMyEmailNotify: function () {
+      return callRpc('get_my_email_notify', {}).then(function (res) {
+        if (res && typeof res.notify_email === 'boolean') { return res.notify_email; }
+        return true;
+      });
     },
     adminCreateScheduleRule: function (r) {
       return callRpc('admin_create_schedule_rule', {

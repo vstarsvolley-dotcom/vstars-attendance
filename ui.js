@@ -10,9 +10,11 @@
   function parseDate(value) {
     if (!value) { return null; }
     if (value instanceof Date) { return value; }
-    // 'YYYY-MM-DD' は UTC 扱いにならないようローカルで組み立てる
+    // 'YYYY-MM-DD' は UTC 午夜として組み立てる。ローカルで組むと
+    // 端末のタイムゾーンによっては前日になり、曜日・日付がずれる。
+    // JST への変換は jstParts (Intl, Asia/Tokyo) が行う。
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
-    if (m) { return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)); }
+    if (m) { return new Date(Date.UTC(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10))); }
     var d = new Date(value);
     return isNaN(d.getTime()) ? null : d;
   }
@@ -32,12 +34,9 @@
     var d = parseDate(date);
     if (!d) { return ''; }
     var p = jstParts(d);
-    var weekday = WEEKDAYS[d.getDay()];
-    // timestamptz の場合は JST の曜日を使う
-    if (typeof date === 'string' && (date.indexOf('T') !== -1 || date.indexOf('+') !== -1 || date.indexOf('Z') !== -1)) {
-      var wd = p.weekday.replace('曜日', '');
-      weekday = wd || weekday;
-    }
+    // 曜日は常に JST 変換の結果を使う (ローカルの getDay() は端末の
+    // タイムゾーンに依存してずれるため使わない)。
+    var weekday = (p.weekday || '').replace('曜日', '') || WEEKDAYS[d.getDay()];
     var start = (startTime || '').slice(0, 5);
     var end = (endTime || '').slice(0, 5);
     var time = start && end ? start + '〜' + end : (start || end || '');
@@ -49,10 +48,7 @@
     var d = parseDate(date);
     if (!d) { return ''; }
     var p = jstParts(d);
-    var weekday = WEEKDAYS[d.getDay()];
-    if (typeof date === 'string' && (date.indexOf('T') !== -1 || date.indexOf('+') !== -1 || date.indexOf('Z') !== -1)) {
-      weekday = p.weekday.replace('曜日', '') || weekday;
-    }
+    var weekday = (p.weekday || '').replace('曜日', '') || WEEKDAYS[d.getDay()];
     return p.month + '/' + p.day + '（' + weekday + '）';
   }
 
@@ -346,6 +342,41 @@
     return card;
   }
 
+  // サーバーからのエラーコードを日本語に変換する。未知のコードは
+  // そのまま返す (デバッグ時に手がかりを残す)。
+  var ERROR_JA = {
+    practice_not_found: '練習が見つかりませんでした。',
+    practice_cancelled: 'この練習は中止されています。',
+    practice_ended: 'この練習はすでに終了しています。',
+    already_registered: 'すでに申し込み済みです。',
+    already_cancelled: 'すでにキャンセル済みです。',
+    invalid_pin: 'PIN が正しくありません。',
+    invalid_pin_format: 'PIN は4桁の数字で入力してください。',
+    device_locked: 'この端末はロックされています。しばらく待ってからもう一度お試しください。',
+    pin_rate_limited: 'PIN の入力間違いが続いたため、一時的にロックされています。しばらく待ってからもう一度お試しください。',
+    real_name_mismatch: '本名が一致しません。登録時の本名を入力してください。',
+    real_name_required: '本名を入力してください。',
+    real_name_rate_limited: '本名の確認に何度も失敗したため、一時的にロックされています。しばらく待ってからもう一度お試しください。',
+    member_withdrawn: '退会済みのため申し込めません。',
+    member_not_found: 'メンバーが見つかりませんでした。',
+    apply_limit_exceeded: '短時間に何度も申し込み・キャンセルをしています。しばらく待ってからもう一度お試しください。',
+    too_many_practices: '一度に申し込めるのは50件までです。',
+    too_many_requests: '短時間に何度も申請されています。しばらく待ってからもう一度お試しください。',
+    duplicate_request: '同じ名前の申請または登録がすでにあります。管理者にお問い合わせください。',
+    unauthorized: 'ログインし直してください。',
+    bind_limit: '短時間に何度も端末を切り替えています。しばらく待ってからもう一度お試しください。',
+    invalid_device_token: '端末の認証情報が無効です。ログインし直してください。'
+  };
+  function friendlyError(e) {
+    if (!e) { return '通信に失敗しました。'; }
+    var code = e.code || '';
+    var msg = e.message || String(e);
+    if (ERROR_JA[code]) { return ERROR_JA[code]; }
+    if (ERROR_JA[msg]) { return ERROR_JA[msg]; }
+    for (var k in ERROR_JA) { if (msg.indexOf(k) !== -1) { return ERROR_JA[k]; } }
+    return msg || '通信に失敗しました。';
+  }
+
   window.VstarsUI = {
     fmtDateTimeJST: fmtDateTimeJST,
     fmtDateJST: fmtDateJST,
@@ -362,6 +393,7 @@
     positionLabel: positionLabel,
     statusLabel: statusLabel,
     statusClass: statusClass,
+    friendlyError: friendlyError,
     csvDownload: csvDownload,
     csvEscape: csvEscape,
     renderPracticeCard: renderPracticeCard

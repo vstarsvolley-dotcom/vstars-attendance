@@ -90,7 +90,7 @@
       UI().toast(dateText + ' に申し込みました。');
       renderPractices();
     } catch (e) {
-      UI().toast('申し込めませんでした。' + (e && e.message ? ' ' + e.message : ''));
+      UI().toast('申し込めませんでした。' + UI().friendlyError(e));
     }
   }
 
@@ -104,11 +104,26 @@
     });
     if (!ok) { return; }
     try {
-      await Api().applyBulk(ids);
-      UI().toast(ids.length + '件申し込みました。');
+      var res = await Api().applyBulk(ids);
+      var results = (res && res.results) || [];
+      var okCount = 0;
+      var failMsgs = [];
+      results.forEach(function (r) {
+        if (r && r.ok) { okCount++; }
+        else if (r) { failMsgs.push(UI().friendlyError({ message: r.error || '', code: r.error || '' })); }
+      });
+      // 旧版の応答 (results なし) は全件成功扱い。
+      if (results.length === 0) { okCount = ids.length; }
+      if (failMsgs.length === 0) {
+        UI().toast(okCount + '件申し込みました。');
+      } else if (okCount === 0) {
+        UI().toast('申し込めませんでした。' + failMsgs[0]);
+      } else {
+        UI().toast(okCount + '件申し込みました。' + failMsgs.length + '件失敗しました。' + failMsgs[0]);
+      }
       renderPractices();
     } catch (e) {
-      UI().toast('まとめ申し込みに失敗しました。' + (e && e.message ? ' ' + e.message : ''));
+      UI().toast('まとめ申し込みに失敗しました。' + UI().friendlyError(e));
       renderPractices();
     }
   }
@@ -130,7 +145,7 @@
       UI().toast('キャンセルしました。');
       renderPractices();
     } catch (e) {
-      UI().toast('キャンセルできませんでした。' + (e && e.message ? ' ' + e.message : ''));
+      UI().toast('キャンセルできませんでした。' + UI().friendlyError(e));
     }
   }
 

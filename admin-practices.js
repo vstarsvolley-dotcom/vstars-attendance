@@ -392,11 +392,14 @@
     form.appendChild(submit);
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
+      // fillMemberSelect は非同期。読み込み前/空のまま送信されると
+      // native required が無言で止めるため、JS で明示する。
+      if (!sel.value) { UI().toast('メンバーを選択してください。'); return; }
       try {
         await Api().adminProxyApply(pid(p), parseInt(sel.value, 10), reason.value.trim());
         UI().toast('代理申込しました。');
         renderAdminPractices();
-      } catch (ex) { UI().toast('代理申込に失敗しました。' + (ex && ex.message ? ' ' + ex.message : '')); }
+      } catch (ex) { UI().toast('代理申込に失敗しました。' + UI().friendlyError(ex)); }
     });
     detail.appendChild(form);
   }
@@ -416,11 +419,12 @@
     form.appendChild(submit);
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
+      if (!sel.value) { UI().toast('メンバーを選択してください。'); return; }
       try {
         await Api().adminAddWalkin(pid(p), parseInt(sel.value, 10));
         UI().toast('ウォークインを追加しました。');
         renderAdminPractices();
-      } catch (ex) { UI().toast('追加に失敗しました。' + (ex && ex.message ? ' ' + ex.message : '')); }
+      } catch (ex) { UI().toast('追加に失敗しました。' + UI().friendlyError(ex)); }
     });
     detail.appendChild(form);
   }
@@ -446,11 +450,12 @@
     form.appendChild(submit);
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
+      if (!sel.value) { UI().toast('メンバーを選択してください。'); return; }
       try {
         await Api().adminCorrectAttendance(pid(p), parseInt(sel.value, 10), resSel.value, reason.value.trim());
         UI().toast('出欠を訂正しました。');
         renderAdminPractices();
-      } catch (ex) { UI().toast('訂正に失敗しました。' + (ex && ex.message ? ' ' + ex.message : '')); }
+      } catch (ex) { UI().toast('訂正に失敗しました。' + UI().friendlyError(ex)); }
     });
     detail.appendChild(form);
   }
@@ -493,6 +498,17 @@
     form.appendChild(submit);
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
+      // 基準日が選択した曜日と一致しないと、ルールが意図した曜日で
+      // 生成されない。サーバーは基準日から曜日をずらさないため
+      // 送信前にチェックする (日付のみの曜日は UTC 午夜で求める)。
+      var anchorParts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(anchor.value || '');
+      if (anchorParts) {
+        var anchorWd = new Date(Date.UTC(parseInt(anchorParts[1], 10), parseInt(anchorParts[2], 10) - 1, parseInt(anchorParts[3], 10))).getUTCDay();
+        if (anchorWd !== parseInt(wdSel.value, 10)) {
+          UI().toast('基準日は選択した曜日と一致する日を選んでください。');
+          return;
+        }
+      }
       try {
         await Api().adminCreateScheduleRule({
           weekday: parseInt(wdSel.value, 10), intervalWeeks: parseInt(ivSel.value, 10),
@@ -503,7 +519,7 @@
         form.reset();
         wdSel.value = '2';
         cap.value = '18';
-      } catch (ex) { UI().toast('ルールの作成に失敗しました。' + (ex && ex.message ? ' ' + ex.message : '')); }
+      } catch (ex) { UI().toast('ルールの作成に失敗しました。' + UI().friendlyError(ex)); }
     });
     return form;
   }
@@ -527,7 +543,7 @@
         await Api().adminGeneratePractices(from.value, to.value);
         UI().toast('練習を生成しました。');
         refreshList(listWrap);
-      } catch (ex) { UI().toast('生成に失敗しました。' + (ex && ex.message ? ' ' + ex.message : '')); }
+      } catch (ex) { UI().toast('生成に失敗しました。' + UI().friendlyError(ex)); }
     });
     return form;
   }
