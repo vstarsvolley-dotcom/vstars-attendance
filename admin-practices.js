@@ -14,6 +14,10 @@
 
   // 管理カレンダーの表示状態 (一覧/カレンダー切替)。
   var calMode = 'list';
+  // 一覧の表示範囲: 'upcoming' (今後の練習) / 'past' (開催済み) / 'all' (すべて)。
+  // 既定は今後の練習。過去分は開催済みに分ける (2026-11-17 ユーザー要望)。
+  var listFilter = 'upcoming';
+  var filterBtns = {};
   var calYear = 0;
   var calMonth = 0;
   var calSelected = '';
@@ -56,6 +60,31 @@
     toolbar.appendChild(listBtn);
     toolbar.appendChild(calBtn);
     view.appendChild(toolbar);
+
+    // 一覧の表示範囲 (今後の練習 / 開催済み / すべて)。一覧表示のときだけ使う。
+    var filterRow = document.createElement('div');
+    filterRow.className = 'toolbar';
+    [['upcoming', '今後の練習'], ['past', '開催済み'], ['all', 'すべて']].forEach(function (def) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-small ' + (listFilter === def[0] ? 'btn-navy' : 'btn-ghost');
+      b.textContent = def[1];
+      b.addEventListener('click', function () {
+        listFilter = def[0];
+        calMode = 'list';
+        updateFilterButtons();
+        showView();
+      });
+      filterBtns[def[0]] = b;
+      filterRow.appendChild(b);
+    });
+    view.appendChild(filterRow);
+
+    function updateFilterButtons() {
+      Object.keys(filterBtns).forEach(function (key) {
+        filterBtns[key].className = 'btn btn-small ' + (listFilter === key ? 'btn-navy' : 'btn-ghost');
+      });
+    }
 
     var listWrap = document.createElement('div');
     view.appendChild(listWrap);
@@ -145,11 +174,23 @@
     var capRow = capI.closest('.field');
     var capMenRow = capMenI.closest('.field');
     var capWomenRow = capWomenI.closest('.field');
+    // 公開/非公開 (SQL 19)。試合・大会のときだけ出す。練習は常に公開で
+    // 選択肢を出さない。既定は公開。
+    var visSel = document.createElement('select');
+    [['public', '公開（全員に見える）'], ['private', '非公開（招待した人だけ）']].forEach(function (kv) {
+      var o = document.createElement('option');
+      o.value = kv[0];
+      o.textContent = kv[1];
+      visSel.appendChild(o);
+    });
+    visSel.value = practice && practice.visibility === 'private' ? 'private' : 'public';
+    var visRow = fieldRow(form, '公開範囲', visSel);
     function toggleGenderCaps() {
       var gendered = kindSel.value === 'match' || kindSel.value === 'tournament';
       if (capRow) { capRow.hidden = gendered; }
       if (capMenRow) { capMenRow.hidden = !gendered; }
       if (capWomenRow) { capWomenRow.hidden = !gendered; }
+      if (visRow) { visRow.hidden = !gendered; }
     }
     kindSel.addEventListener('change', toggleGenderCaps);
     toggleGenderCaps();
@@ -206,14 +247,16 @@
           await Api().adminUpdatePractice(pid(practice), {
             date: dateI.value, startTime: startI.value, endTime: endI.value,
             venue: venueI.value.trim(), capacity: cap,
-            kind: kind, capacityMen: capMen, capacityWomen: capWomen
+            kind: kind, capacityMen: capMen, capacityWomen: capWomen,
+            visibility: isGendered ? visSel.value : 'public'
           });
           UI().toast('練習を更新しました。');
         } else {
           await Api().adminCreatePractice({
             date: dateI.value, startTime: startI.value, endTime: endI.value,
             venue: venueI.value.trim(), capacity: cap, ruleId: null,
-            kind: kind, capacityMen: capMen, capacityWomen: capWomen
+            kind: kind, capacityMen: capMen, capacityWomen: capWomen,
+            visibility: isGendered ? visSel.value : 'public'
           });
           UI().toast('練習を作成しました。');
         }
@@ -246,14 +289,22 @@
     }
     var list = Array.isArray(practices) ? practices : [];
     list.sort(function (a, b) { return String(b.practice_date || '').localeCompare(String(a.practice_date || '')); });
+    // 表示範囲で絞る (日付は JST の今日と比較。今日の練習は「今後の練習」)。
+    var today = UI().jstTodayStr();
+    var upcoming = list.filter(function (p) { return String(p.practice_date || '') >= today; });
+    var past = list.filter(function (p) { return String(p.practice_date || '') < today; });
+    if (filterBtns.upcoming) { filterBtns.upcoming.textContent = '今後の練習 (' + upcoming.length + ')'; }
+    if (filterBtns.past) { filterBtns.past.textContent = '開催済み (' + past.length + ')'; }
+    if (filterBtns.all) { filterBtns.all.textContent = 'すべて (' + list.length + ')'; }
+    var shown = listFilter === 'past' ? past : listFilter === 'all' ? list : upcoming;
     wrap.innerHTML = '';
-    if (list.length === 0) {
-      UI().showEmpty(wrap, '練習がありません。');
+    if (shown.length === 0) {
+      UI().showEmpty(wrap, listFilter === 'past' ? '開催済みの練習がありません。' : listFilter === 'all' ? '練習がありません。' : '今後の練習がありません。');
       return;
     }
     var container = document.createElement('div');
     container.className = 'practice-list';
-    list.forEach(function (p) {
+    shown.forEach(function (p) {
       container.appendChild(practiceCard(p, wrap));
     });
     wrap.appendChild(container);
@@ -398,6 +449,13 @@
     kindBadge.className = 'badge kind-badge ' + UI().kindClass(p.kind || 'practice');
     kindBadge.textContent = UI().kindLabel(p.kind || 'practice');
     head.appendChild(kindBadge);
+    // 非公開の試合・大会 (SQL 19)。
+    if (UI().isPrivate(p)) {
+      var pb = document.createElement('span');
+      pb.className = 'badge badge-private';
+      pb.textContent = '非公開';
+      head.appendChild(pb);
+    }
     if (p.is_cancelled) {
       var b = document.createElement('span');
       b.className = 'badge badge-red';
@@ -444,6 +502,10 @@
     }
     addBtn('名簿', 'btn-ghost', function () { showRoster(p, detail, wrap); });
     addBtn('編集', 'btn-ghost', function () { showPracticeForm(viewEl(), p); });
+    // 招待管理は非公開の試合・大会のときだけ出す (SQL 19)。
+    if (UI().isMatchOrTournament(p) && UI().isPrivate(p)) {
+      addBtn('招待管理', 'btn-ghost', function () { showInvitations(p, detail, wrap); });
+    }
     if (p.is_cancelled) {
       addBtn('復旧', 'btn-ghost', async function () {
         try { await Api().adminRestorePractice(pid(p)); UI().toast('練習を復旧しました。'); renderAdminPractices(); }
@@ -535,6 +597,98 @@
       });
     } catch (e) {
       detail.innerHTML = '<p class="danger-text">名簿を取得できませんでした。' + UI().esc(e && e.message ? e.message : '') + '</p>';
+    }
+  }
+
+  // 招待管理 (SQL 19): 非公開の試合・大会にだけ表示する。
+  // メンバー選択 + 「招待を送る」ボタン、招待一覧 (LINE名・状態・招待日時・
+  // 取り消しボタン)。辞退・保留・取り消し済みの招待は再送できる
+  // (再送すると再度「承認待ち」になる)。
+  async function showInvitations(p, detail, wrap) {
+    detail.innerHTML = '<p>読み込み中…</p>';
+    try {
+      var rows = await Api().adminListInvitations(pid(p));
+      var list = Array.isArray(rows) ? rows : [];
+      detail.innerHTML = '';
+
+      var form = document.createElement('form');
+      form.className = 'form';
+      var sel = document.createElement('select');
+      sel.required = true;
+      var ph = document.createElement('option');
+      ph.value = '';
+      ph.textContent = 'メンバーを選択';
+      sel.appendChild(ph);
+      form.appendChild(sel);
+      fillMemberSelect(sel);
+      var send = document.createElement('button');
+      send.type = 'submit';
+      send.className = 'btn btn-navy';
+      send.textContent = '招待を送る';
+      form.appendChild(send);
+      var note = document.createElement('p');
+      note.className = 'muted';
+      note.textContent = '招待されたメンバーは、マイページで「参加する」を選ぶとこのイベントが見えるようになります。「保留」も選べます。';
+      form.appendChild(note);
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var memberNo = parseInt(sel.value, 10);
+        if (!memberNo) {
+          UI().toast('メンバーを選択してください。');
+          return;
+        }
+        send.disabled = true;
+        try {
+          await Api().adminInviteMember(pid(p), memberNo);
+          UI().toast('招待を送りました。');
+          showInvitations(p, detail, wrap);
+        } catch (ex) {
+          UI().toast('招待を送れませんでした。' + UI().friendlyError(ex));
+          send.disabled = false;
+        }
+      });
+      detail.appendChild(form);
+
+      if (list.length === 0) {
+        var empty = document.createElement('p');
+        empty.className = 'muted';
+        empty.textContent = '招待はまだありません。';
+        detail.appendChild(empty);
+        return;
+      }
+      var table = document.createElement('div');
+      table.className = 'table-wrap';
+      var html = '<table class="data"><thead><tr><th>LINE名</th><th>状態</th><th>招待日時</th><th></th></tr></thead><tbody>';
+      list.forEach(function (inv) {
+        // 回答日時は、参加・辞退・保留の行にだけ表示する
+        // (取り消し済みの行の responded_at は取り消し前の回答時刻のため)。
+        var showResponded = (inv.status === 'accepted' || inv.status === 'declined' || inv.status === 'held') && inv.responded_at;
+        var responded = showResponded ? '（' + UI().fmtDateTimeJST(inv.responded_at) + '）' : '';
+        html += '<tr><td>' + UI().esc(inv.line_name || '-') + '</td><td>' + UI().esc(UI().invitationStatusLabel(inv.status)) + responded + '</td>';
+        html += '<td>' + UI().esc(inv.invited_at ? UI().fmtDateTimeJST(inv.invited_at) : '-') + '</td>';
+        var canCancel = inv.status === 'pending' || inv.status === 'held' || inv.status === 'accepted';
+        html += '<td>' + (canCancel ? '<button type="button" class="btn btn-cancel btn-small" data-inv="' + UI().esc(String(inv.member_no)) + '">取り消し</button>' : '') + '</td></tr>';
+      });
+      html += '</tbody></table>';
+      table.innerHTML = html;
+      detail.appendChild(table);
+      table.querySelectorAll('[data-inv]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          var ok = await UI().confirmSheet({
+            title: '招待を取り消しますか？',
+            body: 'この招待を取り消します。申込済みの場合は申込は残ります。',
+            okLabel: '取り消す', danger: true
+          });
+          if (!ok) { return; }
+          try {
+            await Api().adminCancelInvitation(pid(p), parseInt(btn.getAttribute('data-inv'), 10));
+            UI().toast('招待を取り消しました。');
+            showInvitations(p, detail, wrap);
+          } catch (ex) { UI().toast('取り消しに失敗しました。' + UI().friendlyError(ex)); }
+        });
+      });
+    } catch (e) {
+      detail.innerHTML = '<p class="danger-text">招待一覧を取得できませんでした。' + UI().esc(e && e.message ? e.message : '') + '</p>';
     }
   }
 

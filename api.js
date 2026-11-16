@@ -205,6 +205,16 @@
     getPracticeRoster: function (practiceId) {
       return callRpc('get_practice_roster', { p_token: getToken(), p_practice_id: practiceId });
     },
+    // 非公開イベントへの招待 (SQL 19)。承認待ち・保留中の招待を返す。
+    listMyInvitations: function () {
+      return callRpc('list_my_invitations', { p_token: getToken() });
+    },
+    // 招待への回答。response は 'accepted' / 'declined' / 'held'。
+    respondInvitation: function (invitationId, response) {
+      return callRpc('respond_invitation', {
+        p_token: getToken(), p_invitation_id: invitationId, p_response: response
+      });
+    },
     submitRegistrationRequest: function (req) {
       return callRpc('submit_registration_request', {
         p_real_name: req.realName, p_line_name: req.lineName, p_gender: req.gender,
@@ -241,7 +251,8 @@
         p_venue: p.venue, p_capacity: p.capacity, p_rule_id: p.ruleId || null,
         p_kind: p.kind || 'practice',
         p_capacity_men: p.capacityMen !== undefined ? p.capacityMen : null,
-        p_capacity_women: p.capacityWomen !== undefined ? p.capacityWomen : null
+        p_capacity_women: p.capacityWomen !== undefined ? p.capacityWomen : null,
+        p_visibility: p.visibility !== undefined ? p.visibility : null
       });
     },
     adminUpdatePractice: function (practiceId, p) {
@@ -250,7 +261,8 @@
         p_end_time: p.endTime, p_venue: p.venue, p_capacity: p.capacity,
         p_kind: p.kind || null,
         p_capacity_men: p.capacityMen !== undefined ? p.capacityMen : null,
-        p_capacity_women: p.capacityWomen !== undefined ? p.capacityWomen : null
+        p_capacity_women: p.capacityWomen !== undefined ? p.capacityWomen : null,
+        p_visibility: p.visibility !== undefined ? p.visibility : null
       });
     },
     adminCancelPractice: function (practiceId, reason) {
@@ -271,6 +283,16 @@
     },
     adminPracticeGenderCounts: function (practiceId) {
       return callRpc('admin_practice_gender_counts', { p_practice_id: practiceId });
+    },
+    // 非公開イベントへの招待の管理 (SQL 19)。
+    adminInviteMember: function (practiceId, memberNo) {
+      return callRpc('admin_invite_member', { p_practice_id: practiceId, p_member_no: memberNo });
+    },
+    adminCancelInvitation: function (practiceId, memberNo) {
+      return callRpc('admin_cancel_invitation', { p_practice_id: practiceId, p_member_no: memberNo });
+    },
+    adminListInvitations: function (practiceId) {
+      return callRpc('admin_list_invitations', { p_practice_id: practiceId });
     },
     adminProxyApply: function (practiceId, memberNo, reason) {
       return callRpc('admin_proxy_apply', {

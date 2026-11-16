@@ -425,6 +425,15 @@ table.data tr:last-child td { border-bottom: none; }
 .badge-yellow { background: var(--yellow); color: var(--navy); }
 .badge-green { background: #DCF2E3; color: var(--green); }
 .badge-red { background: #FDE8E8; color: var(--danger); }
+/* 非公開バッジ (SQL 19)。紺地に黄文字で、練習バッジと区別する。 */
+.badge-private { background: var(--navy); color: var(--yellow); }
+
+/* 招待セクション (SQL 19)。マイページ先頭 + 管理者の招待管理で共用。 */
+.invitation-section { margin-bottom: 20px; }
+.invitation-list { display: flex; flex-direction: column; gap: 12px; }
+.invitation-item { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.invitation-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.invitation-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 
 /* 退会済みメンバーのカードは少し薄くして現役と区別する */
 .card-withdrawn { opacity: 0.72; }

@@ -215,6 +215,28 @@
     return k === 'match' || k === 'tournament';
   }
 
+  // 公開/非公開 (SQL 19: practices.visibility)。
+  // 'public'=公開 / 'private'=非公開。練習は常に公開。
+  function visibilityLabel(visibility) {
+    return visibility === 'private' ? '非公開' : '公開';
+  }
+
+  function isPrivate(practice) {
+    return !!practice && practice.visibility === 'private';
+  }
+
+  // 招待の状態表示 (SQL 19: practice_invitations.status)。
+  function invitationStatusLabel(status) {
+    switch (status) {
+      case 'accepted': return '参加';
+      case 'declined': return '辞退';
+      case 'held': return '保留';
+      case 'cancelled': return '取り消し済み';
+      case 'pending':
+      default: return '承認待ち';
+    }
+  }
+
   // 確定数の表示。試合・大会は男女別 (男 X/Y・女 A/B)。
   // その他 (other / prefer_not_to_say) がいれば「・その他 N名」を付ける。
   // 練習は従来通り「確定 n / 定員名」。
@@ -410,6 +432,14 @@
     kindBadge.className = 'badge kind-badge ' + kindClass(practice.kind || 'practice');
     kindBadge.textContent = kindLabel(practice.kind || 'practice');
     head.appendChild(kindBadge);
+    // 非公開の試合・大会は、見えているメンバー (招待承諾済み・申込済み) に
+    // バッジで示す (SQL 19)。見えないメンバーにはカード自体が返らない。
+    if (isPrivate(practice)) {
+      var privateBadge = document.createElement('span');
+      privateBadge.className = 'badge badge-private';
+      privateBadge.textContent = '非公開';
+      head.appendChild(privateBadge);
+    }
     var statusEl = document.createElement('span');
     statusEl.className = 'status-badge ' + statusClass(practice);
     statusEl.textContent = myStatus;
@@ -508,6 +538,11 @@
     duplicate_request: '同じ名前の申請または登録がすでにあります。管理者にお問い合わせください。',
     invalid_kind: '種別が正しくありません。',
     invalid_month: '月が正しくありません。',
+    invalid_visibility: '公開/非公開の指定が正しくありません。',
+    not_private: 'この練習試合・大会は公開のため、招待は必要ありません。',
+    already_responded: 'この招待にはすでに回答済みです。',
+    invalid_response: '回答の種類が正しくありません。',
+    not_found: '招待が見つかりませんでした。',
     unauthorized: 'ログインし直してください。',
     bind_limit: '短時間に何度も端末を切り替えています。しばらく待ってからもう一度お試しください。',
     invalid_device_token: '端末の認証情報が無効です。ログインし直してください。'
@@ -532,6 +567,9 @@
     kindLabel: kindLabel,
     kindClass: kindClass,
     isMatchOrTournament: isMatchOrTournament,
+    visibilityLabel: visibilityLabel,
+    isPrivate: isPrivate,
+    invitationStatusLabel: invitationStatusLabel,
     genderCountsText: genderCountsText,
     esc: esc,
     toast: toast,

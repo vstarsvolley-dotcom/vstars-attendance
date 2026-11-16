@@ -5,7 +5,7 @@
  */
 'use strict';
 
-var CACHE_NAME = 'vstars-v15';
+var CACHE_NAME = 'vstars-v16';
 var CORE_ASSETS = [
   './',
   './index.html',
@@ -83,7 +83,17 @@ self.addEventListener('push', function (event) {
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
   var targetUrl = (event.notification.data && event.notification.data.url) || '/';
-  var fullUrl = new URL(targetUrl, self.location.href).href;
+  // 通知の URL は '/#/practice/<id>' のようなアプリ内パス。
+  // そのまま new URL() するとドメイン直下 (GitHub Pages のルート) になって
+  // 404 になるため、Service Worker の scope (= アプリの配置パス) を基点にする。
+  var fullUrl;
+  if (/^https?:\/\//i.test(targetUrl)) {
+    fullUrl = targetUrl;
+  } else {
+    var base = self.registration.scope.replace(/\/$/, '');
+    var path = targetUrl.charAt(0) === '/' ? targetUrl : '/' + targetUrl;
+    fullUrl = base + path;
+  }
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clients) {
       for (var i = 0; i < clients.length; i++) {

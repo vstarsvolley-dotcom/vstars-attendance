@@ -27,6 +27,13 @@
     title.textContent = 'マイページ';
     view.appendChild(title);
 
+    // 招待 (SQL 19): 非公開の練習試合・大会への招待。
+    // 承認待ち・保留中があれば先頭に表示する。無ければセクションを出さない。
+    var invSec = document.createElement('div');
+    invSec.className = 'invitation-section';
+    view.appendChild(invSec);
+    renderInvitations(invSec);
+
     var lineName = page.line_name || page.lineName || '';
     var memberNo = page.member_no !== undefined ? page.member_no : Api().getMemberNo();
     var memberType = page.member_type || page.memberType || '';
@@ -124,7 +131,8 @@
         var d = document.createElement('span');
         d.className = 'date';
         var kindText = r.kind ? '［' + UI().kindLabel(r.kind) + '］' : '';
-        d.textContent = kindText + UI().fmtDateTimeJST(date, r.start_time, r.end_time) + ' ' + (r.venue || '');
+        var visText = r.visibility === 'private' ? '［非公開］' : '';
+        d.textContent = kindText + visText + UI().fmtDateTimeJST(date, r.start_time, r.end_time) + ' ' + (r.venue || '');
         row.appendChild(d);
         var badge = document.createElement('span');
         badge.className = 'status-badge ' + UI().statusClass(r);
@@ -320,6 +328,115 @@
       }
       refresh();
     });
+  }
+
+  // 招待 (SQL 19): 非公開の練習試合・大会への参加リクエスト。
+  // 承認待ち (pending) と保留中 (held) を一覧する。無ければセクションを出さない。
+  // 参加する → そのイベントが練習一覧・カレンダーに見えるようになる。
+  // 保留する → 保留中のまま残り、後から参加・辞退に変更できる。
+  // 辞退する → 確認の上で辞退する (見えないまま。参加するには管理者の再送が必要)。
+  function renderInvitations(container) {
+    Api().listMyInvitations().then(function (rows) {
+      var list = Array.isArray(rows) ? rows : [];
+      if (list.length === 0) { container.remove(); return; }
+      var h = document.createElement('h2');
+      h.className = 'section-title';
+      h.textContent = '招待';
+      container.appendChild(h);
+      var lead = document.createElement('p');
+      lead.className = 'muted';
+      lead.textContent = '非公開の練習試合・大会への招待です。参加すると練習一覧・カレンダーから申し込めるようになります。';
+      container.appendChild(lead);
+      var wrap = document.createElement('div');
+      wrap.className = 'invitation-list';
+      list.forEach(function (inv) { wrap.appendChild(invitationItem(inv)); });
+      container.appendChild(wrap);
+    }).catch(function () { container.remove(); });
+  }
+
+  function invitationItem(inv) {
+    var item = document.createElement('div');
+    item.className = 'invitation-item';
+    var head = document.createElement('div');
+    head.className = 'invitation-head';
+    var dateEl = document.createElement('div');
+    dateEl.className = 'practice-date';
+    dateEl.textContent = UI().fmtDateTimeJST(inv.practice_date, inv.start_time, inv.end_time);
+    head.appendChild(dateEl);
+    var kindBadge = document.createElement('span');
+    kindBadge.className = 'badge kind-badge ' + UI().kindClass(inv.kind || 'match');
+    kindBadge.textContent = UI().kindLabel(inv.kind || 'match');
+    head.appendChild(kindBadge);
+    var privateBadge = document.createElement('span');
+    privateBadge.className = 'badge badge-private';
+    privateBadge.textContent = '非公開';
+    head.appendChild(privateBadge);
+    var statusBadge = document.createElement('span');
+    statusBadge.className = 'badge ' + (inv.status === 'held' ? 'badge-yellow' : 'badge-green');
+    statusBadge.textContent = inv.status === 'held' ? '保留中' : '承認待ち';
+    head.appendChild(statusBadge);
+    item.appendChild(head);
+
+    var venue = document.createElement('p');
+    venue.className = 'practice-venue';
+    venue.textContent = inv.venue || '';
+    item.appendChild(venue);
+    if (UI().isMatchOrTournament(inv)) {
+      var counts = document.createElement('p');
+      counts.className = 'practice-counts';
+      counts.textContent = UI().genderCountsText({
+        kind: inv.kind,
+        capacity_men: inv.capacity_men, capacity_women: inv.capacity_women,
+        confirmed_count: 0, confirmed_men: 0, confirmed_women: 0, confirmed_other: 0,
+        waitlist_count: 0
+      });
+      item.appendChild(counts);
+    }
+
+    var actions = document.createElement('div');
+    actions.className = 'invitation-actions';
+    var isHeld = inv.status === 'held';
+    addInvBtn(actions, '参加する', 'btn-navy', function () { respond(inv, 'accepted'); });
+    // 保留中はすでに保留のため「保留する」は出さない。
+    if (!isHeld) {
+      addInvBtn(actions, '保留する', 'btn-ghost', function () { respond(inv, 'held'); });
+    }
+    addInvBtn(actions, '辞退する', 'btn-cancel', async function () {
+      var ok = await UI().confirmSheet({
+        title: '招待を辞退しますか？',
+        body: '辞退すると、この練習試合・大会は見えなくなります。あとから参加するには管理者の招待し直しが必要です。',
+        okLabel: '辞退する', danger: true
+      });
+      if (ok) { respond(inv, 'declined'); }
+    });
+    item.appendChild(actions);
+    return item;
+  }
+
+  function addInvBtn(parent, label, cls, fn) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-small ' + cls;
+    btn.textContent = label;
+    btn.addEventListener('click', fn);
+    parent.appendChild(btn);
+    return btn;
+  }
+
+  async function respond(inv, response) {
+    try {
+      await Api().respondInvitation(inv.invitation_id, response);
+      if (response === 'accepted') {
+        UI().toast('参加を受け付けました。練習一覧・カレンダーから申し込めます。');
+      } else if (response === 'held') {
+        UI().toast('招待を保留にしました。あとから参加・辞退できます。');
+      } else {
+        UI().toast('招待を辞退しました。');
+      }
+      renderMyPage();
+    } catch (e) {
+      UI().toast('回答できませんでした。' + UI().friendlyError(e));
+    }
   }
 
   window.VstarsMemberMyPage = { renderMyPage: renderMyPage };
