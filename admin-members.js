@@ -146,6 +146,9 @@
           catch (e) { UI().toast('デバイス取消に失敗しました。' + (e && e.message ? ' ' + e.message : '')); }
         });
         addBtn(actions, '常連にする', 'btn-ghost', function () { showRegularForm(m, detail, function () { refreshList(q.value.trim()); }); });
+        if (isOwner) {
+          addBtn(actions, '管理者にする', 'btn-ghost', function () { showInviteForm(m, detail, function () { refreshList(q.value.trim()); }); });
+        }
         addBtn(actions, 'LINE参加日を設定', 'btn-ghost', function () { showLineJoinedForm(m, detail, function () { refreshList(q.value.trim()); }); });
         addBtn(actions, '休会', 'btn-ghost', function () { showLeave(m, detail, function () { refreshList(q.value.trim()); }); });
         card.appendChild(actions);
@@ -248,6 +251,54 @@
         detail.innerHTML = '';
         if (onDone) { onDone(); }
       } catch (ex) { UI().toast('更新に失敗しました。' + (ex && ex.message ? ' ' + ex.message : '')); }
+    });
+    detail.appendChild(form);
+  }
+
+  // 管理者招待 (オーナーのみ): 招待メール送信 → 権限付与 → アカウント紐付け。
+  function showInviteForm(m, detail, onDone) {
+    detail.innerHTML = '';
+    var form = document.createElement('form');
+    form.className = 'form';
+    form.noValidate = true;
+    var note = document.createElement('p');
+    note.className = 'muted';
+    note.textContent = 'このメンバーに管理者招待メールを送ります。相手がメール内のリンクからパスワードを設定すると、管理者ログインができるようになります。';
+    form.appendChild(note);
+    var emailI = fieldRow(form, '相手のメールアドレス', inputOf('email', '', true, '例: xxx@example.com'));
+    emailI.autocomplete = 'email';
+    var submit = document.createElement('button');
+    submit.type = 'submit';
+    submit.className = 'btn btn-navy';
+    submit.textContent = '招待メールを送る';
+    form.appendChild(submit);
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'btn btn-ghost';
+    closeBtn.textContent = '閉じる';
+    closeBtn.addEventListener('click', function () { detail.innerHTML = ''; });
+    form.appendChild(closeBtn);
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var email = emailI.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        UI().toast('メールアドレスを確認してください。');
+        return;
+      }
+      submit.disabled = true;
+      submit.textContent = '送信中…';
+      try {
+        var invited = await Api().inviteAdmin(email);
+        await Api().adminGrantAdmin(m.member_no, 'admin');
+        await Api().adminLinkAuth(invited.auth_user_id, m.member_no);
+        UI().toast(invited.invited ? '招待メールを送りました。' : 'すでに登録済みのアカウントを管理者にしました。');
+        detail.innerHTML = '';
+        if (onDone) { onDone(); }
+      } catch (ex) {
+        UI().toast('招待に失敗しました。' + (ex && ex.message ? ' ' + ex.message : ''));
+        submit.disabled = false;
+        submit.textContent = '招待メールを送る';
+      }
     });
     detail.appendChild(form);
   }

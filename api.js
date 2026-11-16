@@ -321,6 +321,36 @@
     adminGrantAdmin: function (memberNo, role) {
       return callRpc('admin_grant_admin', { p_member_no: memberNo, p_role: role || 'admin' });
     },
+    adminLinkAuth: function (authUserId, memberNo) {
+      return callRpc('admin_link_auth', { p_auth_user_id: authUserId, p_member_no: memberNo });
+    },
+    // 管理者招待メールの送信 (Edge Function invite-admin)。
+    // オーナーのセッショントークンで呼び、招待済み/既存ユーザーの Auth ID を返す。
+    inviteAdmin: async function (email) {
+      var sb = getClient();
+      var sessionRes = await sb.auth.getSession();
+      var session = sessionRes && sessionRes.data ? sessionRes.data.session : null;
+      var token = session ? session.access_token : '';
+      if (!token) { throw new Error('管理者としてログインし直してください。'); }
+      var url = config.SUPABASE_URL + '/functions/v1/invite-admin';
+      var res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': config.SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ email: email })
+      });
+      var data = null;
+      try { data = await res.json(); } catch (e) {}
+      if (!res.ok) {
+        var msg = (data && data.error) ? data.error : ('招待メールの送信に失敗しました。(' + res.status + ')');
+        if (msg === 'not_owner') { msg = 'オーナーのみ実行できます。'; }
+        if (msg === 'invalid_email') { msg = 'メールアドレスを確認してください。'; }
+        if (msg === 'unauthorized') { msg = '管理者としてログインし直してください。'; }
+        var err = new Error(msg);
+        err.code = data && data.error;
+        throw err;
+      }
+      return data;
+    },
     adminRevokeAdmin: function (memberNo) { return callRpc('admin_revoke_admin', { p_member_no: memberNo }); },
     adminListUnnotified: function () { return callRpc('admin_list_unnotified', {}); },
     adminMarkNotified: function (registrationId, kind) {
