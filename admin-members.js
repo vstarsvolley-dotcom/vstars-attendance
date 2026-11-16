@@ -148,6 +148,23 @@
         addBtn(actions, '常連にする', 'btn-ghost', function () { showRegularForm(m, detail, function () { refreshList(q.value.trim()); }); });
         if (isOwner) {
           addBtn(actions, '管理者にする', 'btn-ghost', function () { showInviteForm(m, detail, function () { refreshList(q.value.trim()); }); });
+          addBtn(actions, '退会させる', 'btn-ghost', async function () {
+            var ok = await UI().confirmSheet({ title: '退会させますか？', body: 'このメンバーは退会扱いになり、今後の申込はすべてキャンセルされます。空いた枠はキャンセル待ちの方に繰り上がります。データは 1 年後に削除されます。この操作は取り消せません。', okLabel: '退会させる', danger: true });
+            if (!ok) { return; }
+            try { await Api().adminConfirmWithdrawal(m.member_no, '管理者による退会'); UI().toast('退会させました。'); refreshList(q.value.trim()); }
+            catch (e) { UI().toast('退会に失敗しました。' + (e && e.message ? ' ' + e.message : '')); }
+          });
+          addBtn(actions, '削除する', 'btn-ghost', async function () {
+            var ok = await UI().confirmSheet({ title: 'メンバーを削除しますか？', body: '出欠履歴のないメンバーのみ削除できます。登録情報・申込・PIN・デバイスがすべて削除され、取り消せません。出欠履歴がある場合は退会をご利用ください。', okLabel: '削除する', danger: true });
+            if (!ok) { return; }
+            try { await Api().adminDeleteMember(m.member_no); UI().toast('メンバーを削除しました。'); refreshList(q.value.trim()); }
+            catch (e) {
+              var msg = e && e.message ? e.message : '';
+              if (msg.indexOf('has_attendance') !== -1) { UI().toast('出欠履歴があるため削除できません。退会をご利用ください。'); }
+              else if (msg.indexOf('is_admin') !== -1) { UI().toast('管理者のため削除できません。先に管理者権限を外してください。'); }
+              else { UI().toast('削除に失敗しました。' + (msg ? ' ' + msg : '')); }
+            }
+          });
         }
         addBtn(actions, 'LINE参加日を設定', 'btn-ghost', function () { showLineJoinedForm(m, detail, function () { refreshList(q.value.trim()); }); });
         addBtn(actions, '休会', 'btn-ghost', function () { showLeave(m, detail, function () { refreshList(q.value.trim()); }); });
@@ -464,7 +481,14 @@
             await Api().adminApproveRequest(r.request_id);
             UI().toast('承認しました。メンバー一覧に表示されるようになります。');
             refresh();
-          } catch (e) { UI().toast('承認に失敗しました。' + (e && e.message ? ' ' + e.message : '')); }
+          } catch (e) {
+            var msg = e && e.message ? e.message : '';
+            if (msg.indexOf('already_member') !== -1) {
+              UI().toast('承認できませんでした。同じ名前の方がすでにメンバーとして登録されています。既存のメンバーをご確認のうえ、この申請は却下してください。');
+            } else {
+              UI().toast('承認に失敗しました。' + (msg ? ' ' + msg : ''));
+            }
+          }
         });
         addBtn(actions, '却下', 'btn-cancel', async function () {
           var ok = await UI().confirmSheet({ title: '申請を却下しますか？', body: '却下した申請は 90 日後に削除されます。', okLabel: '却下する', danger: true });

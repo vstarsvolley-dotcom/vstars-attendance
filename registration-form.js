@@ -192,7 +192,14 @@ back.textContent = 'トップに戻る';
 view.appendChild(back);
 UI().toast('登録申請を送信しました。');
 } catch (ex) {
-errEl.textContent = '送信に失敗しました。' + (ex && ex.message? ' ' + ex.message: '');
+var msg = ex && ex.message ? ex.message : '';
+if (msg.indexOf('duplicate_request') !== -1) {
+errEl.textContent = '同じ名前の申請がすでに承認待ちです。承認されるまでお待ちください。';
+} else if (msg.indexOf('already_member') !== -1) {
+errEl.textContent = '同じ名前の方がすでにメンバーとして登録されています。管理者にお問い合わせください。';
+} else {
+errEl.textContent = '送信に失敗しました。' + (msg ? ' ' + msg : '');
+}
 errEl.hidden = false;
 } finally {
 submit.disabled = false;

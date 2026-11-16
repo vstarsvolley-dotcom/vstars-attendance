@@ -303,6 +303,9 @@
     adminConfirmWithdrawal: function (memberNo, note) {
       return callRpc('admin_confirm_withdrawal', { p_member_no: memberNo, p_note: note || '' });
     },
+    adminDeleteMember: function (memberNo) {
+      return callRpc('admin_delete_member', { p_member_no: memberNo });
+    },
     adminListRegistrationRequests: function () { return callRpc('admin_list_registration_requests', {}); },
     adminApproveRequest: function (requestId) {
       return callRpc('admin_approve_request', { p_request_id: requestId });
