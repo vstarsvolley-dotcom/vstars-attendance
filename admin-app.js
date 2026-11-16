@@ -70,6 +70,14 @@
     var parts = (path || '#/admin').replace(/^#/, '').split('/').filter(function (s) { return s !== ''; });
     var sub = parts[1] || '';
     switch (sub) {
+      case 'set-password':
+        // 招待・再設定リンクでセッションができた後の、パスワード設定専用画面。
+        if (window.VstarsAdminAuth.renderSetPassword) {
+          window.VstarsAdminAuth.renderSetPassword(view);
+        } else {
+          window.VstarsAdminAuth.renderAdminLogin();
+        }
+        break;
       case '':
         window.VstarsAdminDashboard.renderDashboard();
         break;
