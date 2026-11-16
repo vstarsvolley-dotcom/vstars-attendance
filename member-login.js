@@ -16,7 +16,8 @@
 
   function isLockedError(e) {
     var msg = (e && e.message) || '';
-    return /ロック|locked|lock/i.test(msg);
+    var code = (e && e.code) || '';
+    return /ロック|locked|lock|rate_limited/i.test(msg + ' ' + code);
   }
 
   function renderLogin() {
@@ -163,8 +164,33 @@
 
     var pin1 = pinField(pinMode === 'set' ? '新しい PIN（4桁の数字）' : 'PIN（4桁の数字）', 'pin1', 'current-password');
     var pin2 = null;
+    var realNameF = null;
     if (pinMode === 'set') {
       pin2 = pinField('PIN の確認（もう一度入力）', 'pin2', 'new-password');
+      // 本人確認 (2026-11-16 脆弱性診断): 会員番号だけでは他人の PIN を
+      // 設定できてしまうため、登録時の本名も入力してもらう。
+      realNameF = (function () {
+        var div = document.createElement('div');
+        div.className = 'field';
+        var label = document.createElement('label');
+        label.textContent = '本名（登録時のフルネーム）';
+        label.setAttribute('for', 'pin-realname');
+        div.appendChild(label);
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.id = 'pin-realname';
+        input.name = 'realname';
+        input.autocomplete = 'off';
+        input.required = true;
+        input.placeholder = '例: 星直樹';
+        div.appendChild(input);
+        var err = document.createElement('p');
+        err.className = 'field-error';
+        err.hidden = true;
+        div.appendChild(err);
+        form.appendChild(div);
+        return { input: input, err: err };
+      })();
     }
 
     var msg = document.createElement('p');
@@ -200,6 +226,7 @@
       msg.hidden = true;
       pin1.err.hidden = true;
       if (pin2) { pin2.err.hidden = true; }
+      if (realNameF) { realNameF.err.hidden = true; }
       var pin = pin1.input.value;
       if (!/^[0-9]{4}$/.test(pin)) {
         pin1.err.textContent = 'PIN は4桁の数字で入力してください。';
@@ -214,12 +241,19 @@
           pin2.input.focus();
           return;
         }
+        var realName = (realNameF.input.value || '').trim();
+        if (!realName) {
+          realNameF.err.textContent = '本名を入力してください。';
+          realNameF.err.hidden = false;
+          realNameF.input.focus();
+          return;
+        }
       }
       submit.disabled = true;
       submit.textContent = '確認中…';
       try {
         if (pinMode === 'set') {
-          await Api().setInitialPin(selectedMember.member_no, pin);
+          await Api().setInitialPin(selectedMember.member_no, pin, realNameF.input.value);
         } else {
           await Api().verifyPin(selectedMember.member_no, pin);
         }
@@ -230,10 +264,16 @@
         window.location.hash = '#/practices';
       } catch (err) {
         if (isLockedError(err)) {
-          // エラーコード (device_locked) をそのまま出さず日本語で伝える。
-          msg.textContent = 'この端末はロックされています。しばらく待ってからもう一度お試しください。';
+          // エラーコードをそのまま出さず日本語で伝える。
+          if ((err && err.code) === 'pin_rate_limited' || /rate_limited/i.test((err && err.message) || '')) {
+            msg.textContent = 'PIN の入力間違いが続いたため、一時的にロックされています。しばらく待ってからもう一度お試しください。';
+          } else {
+            msg.textContent = 'この端末はロックされています。しばらく待ってからもう一度お試しください。';
+          }
         } else if (pinMode === 'verify') {
           msg.textContent = 'PIN が正しくありません。もう一度入力してください。';
+        } else if (/real_name/i.test((err && err.message) || '')) {
+          msg.textContent = '本名が一致しません。登録時の本名を入力してください。';
         } else {
           msg.textContent = 'PIN を設定できませんでした。' + (err && err.message ? ' ' + err.message : '');
         }
