@@ -230,7 +230,8 @@
         window.location.hash = '#/practices';
       } catch (err) {
         if (isLockedError(err)) {
-          msg.textContent = err.message + ' しばらく待ってからもう一度お試しください。';
+          // エラーコード (device_locked) をそのまま出さず日本語で伝える。
+          msg.textContent = 'この端末はロックされています。しばらく待ってからもう一度お試しください。';
         } else if (pinMode === 'verify') {
           msg.textContent = 'PIN が正しくありません。もう一度入力してください。';
         } else {

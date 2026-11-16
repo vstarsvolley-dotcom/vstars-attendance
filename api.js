@@ -199,7 +199,16 @@
     },
 
     // --- 管理者用 RPC (Supabase Auth のログインが前提) ---
-    adminListPractices: function () { return callRpc('admin_list_practices', {}); },
+    adminListPractices: function () {
+      return callRpc('admin_list_practices', {}).then(function (rows) {
+        // admin_list_practices は status ('scheduled'/'cancelled') を返すが、
+        // 画面側は is_cancelled を見るためここで正規化する (E2-10)。
+        (Array.isArray(rows) ? rows : []).forEach(function (p) {
+          p.is_cancelled = p.status === 'cancelled';
+        });
+        return rows;
+      });
+    },
     adminCreatePractice: function (p) {
       return callRpc('admin_create_practice', {
         p_practice_date: p.date, p_start_time: p.startTime, p_end_time: p.endTime,

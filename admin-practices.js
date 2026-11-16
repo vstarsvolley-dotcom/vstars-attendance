@@ -79,6 +79,9 @@
     var form = document.createElement('form');
     form.className = 'form practice-card';
     form.style.marginBottom = '16px';
+    // ブラウザ標準の min チェックだと定員0などが無言で止まるため、
+    // JS 側のチェック (定員メッセージ) を必ず通す (E2-3(2))。
+    form.noValidate = true;
     var title = document.createElement('h2');
     title.className = 'section-title';
     title.style.marginTop = '0';
@@ -120,25 +123,36 @@
         err.hidden = false;
         return;
       }
+      var cap = parseInt(capI.value, 10);
+      if (!cap || cap < 1 || cap > 100) {
+        err.textContent = '定員は1〜100人で入力してください。';
+        err.hidden = false;
+        return;
+      }
       submit.disabled = true;
       try {
         if (isEdit) {
           await Api().adminUpdatePractice(pid(practice), {
             date: dateI.value, startTime: startI.value, endTime: endI.value,
-            venue: venueI.value.trim(), capacity: parseInt(capI.value, 10)
+            venue: venueI.value.trim(), capacity: cap
           });
           UI().toast('練習を更新しました。');
         } else {
           await Api().adminCreatePractice({
             date: dateI.value, startTime: startI.value, endTime: endI.value,
-            venue: venueI.value.trim(), capacity: parseInt(capI.value, 10), ruleId: null
+            venue: venueI.value.trim(), capacity: cap, ruleId: null
           });
           UI().toast('練習を作成しました。');
         }
         form.remove();
         renderAdminPractices();
       } catch (ex) {
-        err.textContent = '保存できませんでした。' + (ex && ex.message ? ' ' + ex.message : '');
+        var msg = ex && ex.message ? ex.message : '';
+        // 重複は DB の制約名をそのまま出さず日本語で伝える (E2-3(3))。
+        if (/duplicate key|unique constraint/i.test(msg)) {
+          msg = '同じ日時・会場の練習がすでにあります。';
+        }
+        err.textContent = '保存できませんでした。' + (msg ? ' ' + msg : '');
         err.hidden = false;
         submit.disabled = false;
       }
@@ -243,16 +257,19 @@
     addBtn('定員変更', 'btn-ghost', function () { changeCapacity(p, detail, wrap); });
     addBtn('代理申込', 'btn-ghost', function () { proxyApplyForm(p, detail, wrap); });
     addBtn('ウォークイン追加', 'btn-ghost', function () { walkinForm(p, detail, wrap); });
-    addBtn('出欠確定', 'btn-navy', async function () {
-      var ok = await UI().confirmSheet({
-        title: '出欠を確定しますか？',
-        body: '確定したメンバーは出席扱いになります。あとから出欠訂正で修正できます。',
-        okLabel: '確定する'
+    // 出欠確定済みの練習では確定ボタンを出さない (二重確定の経路を消す。E2-5)。
+    if (!p.attendance_finalized_at) {
+      addBtn('出欠確定', 'btn-navy', async function () {
+        var ok = await UI().confirmSheet({
+          title: '出欠を確定しますか？',
+          body: '確定したメンバーは出席扱いになります。あとから出欠訂正で修正できます。',
+          okLabel: '確定する'
+        });
+        if (!ok) { return; }
+        try { await Api().adminFinalizeAttendance(pid(p)); UI().toast('出欠を確定しました。'); renderAdminPractices(); }
+        catch (e) { UI().toast('出欠確定に失敗しました。' + (e && e.message ? ' ' + e.message : '')); }
       });
-      if (!ok) { return; }
-      try { await Api().adminFinalizeAttendance(pid(p)); UI().toast('出欠を確定しました。'); renderAdminPractices(); }
-      catch (e) { UI().toast('出欠確定に失敗しました。' + (e && e.message ? ' ' + e.message : '')); }
-    });
+    }
     addBtn('出欠訂正', 'btn-ghost', function () { correctForm(p, detail, wrap); });
     card.appendChild(actions);
     return card;
@@ -316,6 +333,9 @@
     detail.innerHTML = '';
     var form = document.createElement('form');
     form.className = 'form';
+    // ブラウザ標準の min チェックだと定員0が無言で止まるため、
+    // JS 側のチェックを必ず通す (E2-4)。
+    form.noValidate = true;
     var cur = p.capacity !== undefined ? p.capacity : 18;
     var input = fieldRow(form, '新しい定員（現在 ' + cur + '人）', inputOf('number', cur, true));
     input.min = '1';
@@ -332,6 +352,10 @@
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
       var next = parseInt(input.value, 10);
+      if (!next || next < 1 || next > 100) {
+        UI().toast('定員は1〜100人で入力してください。');
+        return;
+      }
       if (next < cur) {
         var ok = await UI().confirmSheet({
           title: '定員を減らしますか？',
