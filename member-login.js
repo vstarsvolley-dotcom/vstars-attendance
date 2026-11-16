@@ -182,7 +182,7 @@
         input.name = 'realname';
         input.autocomplete = 'off';
         input.required = true;
-        input.placeholder = '例: 星直樹';
+        input.placeholder = '例: バレー太郎';
         div.appendChild(input);
         var err = document.createElement('p');
         err.className = 'field-error';
