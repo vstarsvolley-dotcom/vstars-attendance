@@ -1,0 +1,318 @@
+/* Vstars 出欠 — API 層
+ * Supabase クライアントを1つ作り、CONTRACT.md の RPC を1関数ずつラップする。
+ * すべての呼び出しは supabase.rpc(name, args) (POST)。
+ * service_role キーはどこにも使わない。anon key のみ。
+ * トークン: localStorage 'vstars_device_token'
+ * 会員番号: localStorage 'vstars_member_no'
+ */
+'use strict';
+
+(function () {
+  var TOKEN_KEY = 'vstars_device_token';
+  var MEMBER_NO_KEY = 'vstars_member_no';
+  var config = window.VSTARS_CONFIG || {};
+  var client = null;
+  var configError = '';
+
+  if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
+    configError = 'Supabase の設定が未入力です。config.js に SUPABASE_URL と SUPABASE_ANON_KEY を入力してください。';
+  } else if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
+    configError = 'Supabase ライブラリを読み込めませんでした。ネットワーク接続を確認してください。';
+  } else {
+    try {
+      client = window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
+    } catch (e) {
+      configError = 'Supabase クライアントの作成に失敗しました: ' + (e && e.message ? e.message : e);
+    }
+  }
+
+  function getClient() {
+    if (!client) { throw new Error(configError || 'Supabase に接続できません。'); }
+    return client;
+  }
+
+  function rpcErrorMessage(err) {
+    if (!err) { return '通信に失敗しました。'; }
+    return err.message || err.error_description || err.hint || '通信に失敗しました。';
+  }
+
+  // RPC を呼び、成功時は data を、失敗時は Error を throw して返す。
+  async function callRpc(name, args) {
+    var sb = getClient();
+    var res = await sb.rpc(name, args || {});
+    if (res.error) {
+      var err = new Error(rpcErrorMessage(res.error));
+      err.code = res.error.code;
+      err.rpc = name;
+      throw err;
+    }
+    return res.data;
+  }
+
+  function getToken() {
+    try { return window.localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; }
+  }
+
+  function getMemberNo() {
+    try {
+      var v = window.localStorage.getItem(MEMBER_NO_KEY);
+      if (v === null || v === undefined || v === '') { return null; }
+      var n = parseInt(v, 10);
+      return isNaN(n) ? null : n;
+    } catch (e) { return null; }
+  }
+
+  function setSession(token, memberNo) {
+    try {
+      window.localStorage.setItem(TOKEN_KEY, token);
+      window.localStorage.setItem(MEMBER_NO_KEY, String(memberNo));
+    } catch (e) { /* プライベートモード等では保存できない場合がある */ }
+  }
+
+  function clearSession() {
+    try {
+      window.localStorage.removeItem(TOKEN_KEY);
+      window.localStorage.removeItem(MEMBER_NO_KEY);
+    } catch (e) { /* ignore */ }
+  }
+
+  // crypto.getRandomValues で 32 バイトのランダム値を base64url 化する。
+  function generateDeviceToken() {
+    var bytes = new Uint8Array(32);
+    if (window.crypto && window.crypto.getRandomValues) {
+      window.crypto.getRandomValues(bytes);
+    } else {
+      for (var i = 0; i < bytes.length; i++) { bytes[i] = Math.floor(Math.random() * 256); }
+    }
+    var bin = '';
+    for (var j = 0; j < bytes.length; j++) { bin += String.fromCharCode(bytes[j]); }
+    return window.btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function deviceLabel() {
+    var ua = (window.navigator && window.navigator.userAgent) || '';
+    if (/iPhone|iPad|iPod/.test(ua)) { return 'iPhone/iPad'; }
+    if (/Android/.test(ua)) { return 'Android'; }
+    if (/Windows/.test(ua)) { return 'Windows'; }
+    if (/Macintosh/.test(ua)) { return 'Mac'; }
+    return 'ブラウザ';
+  }
+
+  var api = {
+    // --- 状態 ---
+    isConfigured: function () { return !!client; },
+    configError: function () { return configError; },
+    getClient: getClient,
+    // --- トークン ---
+    getToken: getToken,
+    getMemberNo: getMemberNo,
+    setSession: setSession,
+    clearSession: clearSession,
+    generateDeviceToken: generateDeviceToken,
+    deviceLabel: deviceLabel,
+    ensureDeviceToken: function () {
+      var t = getToken();
+      if (!t) { t = generateDeviceToken(); try { window.localStorage.setItem(TOKEN_KEY, t); } catch (e) {} }
+      return t;
+    },
+
+    // --- メンバー用 RPC ---
+    listMemberNames: function () { return callRpc('list_member_names', {}); },
+    setInitialPin: function (memberNo, pin) {
+      return callRpc('set_initial_pin', {
+        p_member_no: memberNo, p_pin: pin,
+        p_device_token: api.ensureDeviceToken(), p_device_label: deviceLabel()
+      });
+    },
+    verifyPin: function (memberNo, pin) {
+      return callRpc('verify_pin', {
+        p_member_no: memberNo, p_pin: pin,
+        p_device_token: api.ensureDeviceToken(), p_device_label: deviceLabel()
+      });
+    },
+    listPractices: function () { return callRpc('list_practices', { p_token: getToken() }); },
+    applyPractice: function (practiceId) {
+      return callRpc('apply_practice', { p_token: getToken(), p_practice_id: practiceId });
+    },
+    applyBulk: function (practiceIds) {
+      return callRpc('apply_bulk', { p_token: getToken(), p_practice_ids: practiceIds });
+    },
+    cancelRegistration: function (registrationId) {
+      return callRpc('cancel_registration', { p_token: getToken(), p_registration_id: registrationId });
+    },
+    listMyNotices: function () { return callRpc('list_my_notices', { p_token: getToken() }); },
+    ackStatusChange: function (registrationId) {
+      return callRpc('ack_status_change', { p_token: getToken(), p_registration_id: registrationId });
+    },
+    getMyPage: function () { return callRpc('get_my_page', { p_token: getToken() }); },
+    getPracticeRoster: function (practiceId) {
+      return callRpc('get_practice_roster', { p_token: getToken(), p_practice_id: practiceId });
+    },
+    submitRegistrationRequest: function (req) {
+      return callRpc('submit_registration_request', {
+        p_real_name: req.realName, p_line_name: req.lineName, p_gender: req.gender,
+        p_birth_date: req.birthDate, p_consent: !!req.consent
+      });
+    },
+    submitRegistrationRequestByAgent: function (apiKey, req) {
+      return callRpc('submit_registration_request_by_agent', {
+        p_api_key: apiKey, p_real_name: req.realName, p_line_name: req.lineName,
+        p_gender: req.gender, p_birth_date: req.birthDate, p_consent: !!req.consent
+      });
+    },
+
+    // --- 管理者用 RPC (Supabase Auth のログインが前提) ---
+    adminListPractices: function () { return callRpc('admin_list_practices', {}); },
+    adminCreatePractice: function (p) {
+      return callRpc('admin_create_practice', {
+        p_practice_date: p.date, p_start_time: p.startTime, p_end_time: p.endTime,
+        p_venue: p.venue, p_capacity: p.capacity, p_rule_id: p.ruleId || null
+      });
+    },
+    adminUpdatePractice: function (practiceId, p) {
+      return callRpc('admin_update_practice', {
+        p_practice_id: practiceId, p_practice_date: p.date, p_start_time: p.startTime,
+        p_end_time: p.endTime, p_venue: p.venue, p_capacity: p.capacity
+      });
+    },
+    adminCancelPractice: function (practiceId, reason) {
+      return callRpc('admin_cancel_practice', { p_practice_id: practiceId, p_reason: reason || '' });
+    },
+    adminRestorePractice: function (practiceId) {
+      return callRpc('admin_restore_practice', { p_practice_id: practiceId });
+    },
+    adminChangeCapacity: function (practiceId, capacity) {
+      return callRpc('admin_change_capacity', { p_practice_id: practiceId, p_capacity: capacity });
+    },
+    adminGetPracticeRoster: function (practiceId) {
+      return callRpc('admin_get_practice_roster', { p_practice_id: practiceId });
+    },
+    adminPracticeGenderCounts: function (practiceId) {
+      return callRpc('admin_practice_gender_counts', { p_practice_id: practiceId });
+    },
+    adminProxyApply: function (practiceId, memberNo, reason) {
+      return callRpc('admin_proxy_apply', {
+        p_practice_id: practiceId, p_member_no: memberNo, p_reason: reason || ''
+      });
+    },
+    adminProxyCancel: function (registrationId, reason) {
+      return callRpc('admin_proxy_cancel', { p_registration_id: registrationId, p_reason: reason || '' });
+    },
+    adminAddWalkin: function (practiceId, memberNo) {
+      return callRpc('admin_add_walkin', { p_practice_id: practiceId, p_member_no: memberNo });
+    },
+    adminFinalizeAttendance: function (practiceId) {
+      return callRpc('admin_finalize_attendance', { p_practice_id: practiceId });
+    },
+    adminCorrectAttendance: function (practiceId, memberNo, result, reason) {
+      return callRpc('admin_correct_attendance', {
+        p_practice_id: practiceId, p_member_no: memberNo, p_result: result, p_reason: reason || ''
+      });
+    },
+    adminListMembers: function (query) {
+      return callRpc('admin_list_members', { p_query: query || '' });
+    },
+    adminCreateMember: function (m) {
+      return callRpc('admin_create_member', {
+        p_real_name: m.realName, p_line_name: m.lineName, p_gender: m.gender, p_birth_date: m.birthDate
+      });
+    },
+    adminUpdateMember: function (memberNo, m) {
+      return callRpc('admin_update_member', {
+        p_member_no: memberNo, p_real_name: m.realName, p_line_name: m.lineName,
+        p_gender: m.gender, p_birth_date: m.birthDate, p_admin_note: m.adminNote || ''
+      });
+    },
+    adminResetPin: function (memberNo) { return callRpc('admin_reset_pin', { p_member_no: memberNo }); },
+    adminRevokeDevices: function (memberNo) { return callRpc('admin_revoke_devices', { p_member_no: memberNo }); },
+    adminMarkRegular: function (memberNo, reason) {
+      return callRpc('admin_mark_regular', { p_member_no: memberNo, p_reason: reason || '' });
+    },
+    adminSetLineGroupJoined: function (memberNo, joinedDate) {
+      return callRpc('admin_set_line_group_joined', { p_member_no: memberNo, p_joined_date: joinedDate });
+    },
+    adminListLeaves: function (memberNo) { return callRpc('admin_list_leaves', { p_member_no: memberNo }); },
+    adminAddLeave: function (memberNo, startDate, endDate, reason) {
+      return callRpc('admin_add_leave', {
+        p_member_no: memberNo, p_start_date: startDate, p_end_date: endDate, p_reason: reason || ''
+      });
+    },
+    adminEndLeave: function (leaveId) { return callRpc('admin_end_leave', { p_leave_id: leaveId }); },
+    adminListWithdrawalCandidates: function () { return callRpc('admin_list_withdrawal_candidates', {}); },
+    adminHoldWithdrawal: function (memberNo, holdUntil, note) {
+      return callRpc('admin_hold_withdrawal', {
+        p_member_no: memberNo, p_hold_until: holdUntil, p_note: note || ''
+      });
+    },
+    adminConfirmWithdrawal: function (memberNo, note) {
+      return callRpc('admin_confirm_withdrawal', { p_member_no: memberNo, p_note: note || '' });
+    },
+    adminListRegistrationRequests: function () { return callRpc('admin_list_registration_requests', {}); },
+    adminApproveRequest: function (requestId) {
+      return callRpc('admin_approve_request', { p_request_id: requestId });
+    },
+    adminRejectRequest: function (requestId, reason) {
+      return callRpc('admin_reject_request', { p_request_id: requestId, p_reason: reason || '' });
+    },
+    adminMonthlyStats: function (year, month) {
+      return callRpc('admin_monthly_stats', { p_year: year, p_month: month });
+    },
+    adminExportAttendanceCsv: function (year, month) {
+      return callRpc('admin_export_attendance_csv', { p_year: year, p_month: month });
+    },
+    adminExportMembersCsv: function () { return callRpc('admin_export_members_csv', {}); },
+    adminListAdmins: function () { return callRpc('admin_list_admins', {}); },
+    adminGrantAdmin: function (memberNo, role) {
+      return callRpc('admin_grant_admin', { p_member_no: memberNo, p_role: role || 'admin' });
+    },
+    adminRevokeAdmin: function (memberNo) { return callRpc('admin_revoke_admin', { p_member_no: memberNo }); },
+    adminListUnnotified: function () { return callRpc('admin_list_unnotified', {}); },
+    adminMarkNotified: function (registrationId, kind) {
+      return callRpc('admin_mark_notified', { p_registration_id: registrationId, p_kind: kind });
+    },
+    adminListMailOutbox: function () { return callRpc('admin_list_mail_outbox', {}); },
+    adminRetryMail: function (outboxId) { return callRpc('admin_retry_mail', { p_outbox_id: outboxId }); },
+    adminMailStatus: function () { return callRpc('admin_mail_status', {}); },
+    setMyEmailNotify: function (enabled) {
+      return callRpc('set_my_email_notify', { p_enabled: !!enabled });
+    },
+    adminCreateScheduleRule: function (r) {
+      return callRpc('admin_create_schedule_rule', {
+        p_weekday: r.weekday, p_interval_weeks: r.intervalWeeks, p_anchor_date: r.anchorDate,
+        p_start_time: r.startTime, p_end_time: r.endTime, p_venue: r.venue, p_capacity: r.capacity
+      });
+    },
+    adminListScheduleRules: function () { return callRpc('admin_list_schedule_rules', {}); },
+    adminDisableScheduleRule: function (ruleId) {
+      return callRpc('admin_disable_schedule_rule', { p_rule_id: ruleId });
+    },
+    adminGeneratePractices: function (fromDate, toDate) {
+      return callRpc('admin_generate_practices', { p_from_date: fromDate, p_to_date: toDate });
+    },
+    purgeWithdrawnMembers: function () { return callRpc('purge_withdrawn_members', {}); },
+
+    // --- 管理者ログイン (Supabase Auth メール/パスワード) ---
+    signInAdmin: async function (email, password) {
+      var sb = getClient();
+      var res = await sb.auth.signInWithPassword({ email: email, password: password });
+      if (res.error) { throw new Error(rpcErrorMessage(res.error)); }
+      return res.data;
+    },
+    signOutAdmin: async function () {
+      var sb = getClient();
+      await sb.auth.signOut();
+    },
+    getAdminSession: async function () {
+      var sb = getClient();
+      var res = await sb.auth.getSession();
+      if (res.error) { throw new Error(rpcErrorMessage(res.error)); }
+      return res.data && res.data.session ? res.data.session : null;
+    },
+    onAdminAuthChange: function (cb) {
+      var sb = getClient();
+      return sb.auth.onAuthStateChange(cb);
+    }
+  };
+
+  window.VstarsApi = api;
+})();

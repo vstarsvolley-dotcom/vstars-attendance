@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#13294B">
+<meta name="description" content="Vstars 出欠管理 — 練習の申し込み・キャンセル・待ち状況の確認">
+<title>Vstars 出欠</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="icon-192.png" type="image/png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="config.js" defer></script>
+<script src="api.js" defer></script>
+<script src="ui.js" defer></script>
+<script src="member-app.js" defer></script>
+<script src="member-login.js" defer></script>
+<script src="member-practices.js" defer></script>
+<script src="member-my-page.js" defer></script>
+<script src="admin-app.js" defer></script>
+<script src="admin-auth.js" defer></script>
+<script src="admin-dashboard.js" defer></script>
+<script src="admin-practices.js" defer></script>
+<script src="admin-members.js" defer></script>
+<script src="admin-reports.js" defer></script>
+<script src="registration-form.js" defer></script>
+</head>
+<body>
+<div id="app">
+  <header id="app-header">
+    <div class="header-inner">
+      <a class="brand" href="#/practices">Vstars</a>
+      <span class="header-sub">出欠</span>
+      <span class="header-spacer"></span>
+      <span id="header-user" class="header-user" hidden></span>
+      <nav id="header-nav" class="header-nav" aria-label="メインナビ">
+        <a href="#/practices" data-nav="practices">練習一覧</a>
+        <a href="#/mypage" data-nav="mypage">マイページ</a>
+        <a href="#/admin" data-nav="admin">管理</a>
+      </nav>
+    </div>
+  </header>
+
+  <div id="offline-indicator" class="offline-indicator" hidden>オフラインです。表示はキャッシュの内容です。</div>
+
+  <div id="notice-banner" class="notice-banner" hidden>
+    <p id="notice-banner-text" class="notice-banner-text"></p>
+    <button id="notice-banner-ack" class="btn btn-yellow" type="button">確認する</button>
+  </div>
+
+  <main id="view" aria-live="polite"></main>
+
+  <div id="bulk-bar" class="bulk-bar" hidden>
+    <span id="bulk-count" class="bulk-count">0件選択中</span>
+    <button id="bulk-apply-btn" class="btn btn-yellow btn-large" type="button">まとめ申し込む</button>
+  </div>
+</div>
+
+<div id="sheet" class="sheet-backdrop" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <h2 id="sheet-title" class="sheet-title"></h2>
+    <div id="sheet-body" class="sheet-body"></div>
+    <div id="sheet-actions" class="sheet-actions"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<noscript><p class="noscript">Vstars 出欠を利用するには JavaScript を有効にしてください。</p></noscript>
+</body>
+</html>
