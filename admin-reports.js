@@ -180,7 +180,7 @@
           retryBtn.textContent = '再送する';
           retryBtn.addEventListener('click', async function () {
             try {
-              await Api().adminRetryMail(r.id);
+              await Api().adminRetryMail(r.outbox_id);
               UI().toast('再送をキューに入れました。');
               refreshOutbox();
             } catch (e) { UI().toast('再送に失敗しました。' + (e && e.message ? ' ' + e.message : '')); }

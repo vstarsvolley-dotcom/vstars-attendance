@@ -305,7 +305,7 @@
         endBtn.textContent = '休会を終了';
         endBtn.addEventListener('click', async function () {
           try {
-            await Api().adminEndLeave(lv.id);
+            await Api().adminEndLeave(lv.leave_id);
             UI().toast('休会を終了しました。');
             if (onDone) { onDone(); }
           } catch (e) { UI().toast('休会の終了に失敗しました。' + (e && e.message ? ' ' + e.message : '')); }
@@ -365,13 +365,13 @@
         h.textContent = (r.line_name || '') + ' (' + UI().genderLabel(r.gender) + ')';
         card.appendChild(h);
         var p = document.createElement('p');
-        p.textContent = '本名: ' + (r.real_name || '-') + ' / 申請日: ' + UI().fmtDateTimeJST(r.created_at);
+        p.textContent = '本名: ' + (r.real_name || '-') + ' / 申請日: ' + UI().fmtDateTimeJST(r.consent_at);
         card.appendChild(p);
         var actions = document.createElement('div');
         actions.className = 'practice-actions';
         addBtn(actions, '承認', 'btn-navy', async function () {
           try {
-            await Api().adminApproveRequest(r.id);
+            await Api().adminApproveRequest(r.request_id);
             UI().toast('承認しました。メンバー一覧に表示されるようになります。');
             refresh();
           } catch (e) { UI().toast('承認に失敗しました。' + (e && e.message ? ' ' + e.message : '')); }
@@ -380,7 +380,7 @@
           var ok = await UI().confirmSheet({ title: '申請を却下しますか？', body: '却下した申請は 90 日後に削除されます。', okLabel: '却下する', danger: true });
           if (!ok) { return; }
           try {
-            await Api().adminRejectRequest(r.id, '管理者による却下');
+            await Api().adminRejectRequest(r.request_id, '管理者による却下');
             UI().toast('却下しました。');
             refresh();
           } catch (e) { UI().toast('却下に失敗しました。' + (e && e.message ? ' ' + e.message : '')); }

@@ -5,7 +5,7 @@
  */
 'use strict';
 
-var CACHE_NAME = 'vstars-v2';
+var CACHE_NAME = 'vstars-v4';
 var CORE_ASSETS = [
   './',
   './index.html',
@@ -53,6 +53,43 @@ self.addEventListener('activate', function (event) {
       return Promise.all(keys.filter(function (k) { return k !== CACHE_NAME; })
         .map(function (k) { return caches.delete(k); }));
     }).then(function () { return self.clients.claim(); })
+  );
+});
+
+self.addEventListener('push', function (event) {
+  var data = { title: 'Vstars 出欠', body: '', url: '/' };
+  try {
+    if (event.data) {
+      var incoming = event.data.json();
+      if (incoming.title) { data.title = incoming.title; }
+      if (incoming.body) { data.body = incoming.body; }
+      if (incoming.url) { data.url = incoming.url; }
+    }
+  } catch (e) { /* ペイロードが読めなければ既定文言で表示 */ }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: './icon-192.png',
+      badge: './icon-192.png',
+      tag: 'vstars-promotion',
+      renotify: true,
+      data: { url: data.url }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', function (event) {
+  event.notification.close();
+  var targetUrl = (event.notification.data && event.notification.data.url) || '/';
+  var fullUrl = new URL(targetUrl, self.location.href).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clients) {
+      for (var i = 0; i < clients.length; i++) {
+        if ('focus' in clients[i]) { return clients[i].focus(); }
+      }
+      if (self.clients.openWindow) { return self.clients.openWindow(fullUrl); }
+      return undefined;
+    })
   );
 });
 
