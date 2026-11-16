@@ -14,6 +14,16 @@
   var client = null;
   var configError = '';
 
+  // 招待・パスワード再設定リンクの判定はここで同期的に行う。
+  // Supabase クライアントは初期化時に URL の access_token を消費して
+  // hash を消してしまうため、後から見ると type=recovery が分からなくなる。
+  try {
+    var _h = window.location.hash || '';
+    if (_h.indexOf('type=recovery') !== -1 || _h.indexOf('type=invite') !== -1) {
+      window.sessionStorage.setItem('vstars_set_password', '1');
+    }
+  } catch (e) {}
+
   if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
     configError = 'Supabase の設定が未入力です。config.js に SUPABASE_URL と SUPABASE_ANON_KEY を入力してください。';
   } else if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
