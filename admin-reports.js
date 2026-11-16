@@ -81,23 +81,28 @@
       var month = parseInt(monthI.value, 10);
       statsResult.innerHTML = '<p>読み込み中…</p>';
       try {
-        var rows = await Api().adminMonthlyStats(year, month);
-        rows = Array.isArray(rows) ? rows : [];
-        if (rows.length === 0) {
+        var st = await Api().adminMonthlyStats(year, month);
+        // admin_monthly_stats は集計オブジェクト1件を返す
+        // { year, month, practices_held, confirmed_slots, present, attendance_rate }。
+        // 配列ではないため、Array.isArray 判定では常に「データなし」になっていた。
+        if (!st || typeof st !== 'object') {
           statsResult.innerHTML = '<p>この月のデータはありません。</p>';
           return;
         }
-        var html = '<div class="table-wrap"><table class="data"><thead><tr><th>LINE名</th><th>No.</th><th>出席回数</th><th>出席率</th></tr></thead><tbody>';
-        rows.forEach(function (r) {
-          var rate = (r.rate !== undefined && r.rate !== null) ? Math.round(r.rate * 100) + '%'
-            : (r.attendance_rate !== undefined && r.attendance_rate !== null ? Math.round(r.attendance_rate * 100) + '%' : '-');
-          html += '<tr><td>' + UI().esc(r.line_name || '-') + '</td><td>' + UI().esc(r.member_no !== undefined ? r.member_no : '-') + '</td><td>' +
-            UI().esc(r.count !== undefined ? r.count : (r.attendance_count !== undefined ? r.attendance_count : 0)) + '</td><td>' + UI().esc(rate) + '</td></tr>';
-        });
-        html += '</tbody></table></div>';
-        statsResult.innerHTML = html;
-      } catch (ex) {
-        statsResult.innerHTML = '<p class="danger-text">月次統計を取得できませんでした。' + UI().esc(ex && ex.message ? ex.message : '') + '</p>';
+        var held = st.practices_held !== undefined ? st.practices_held : 0;
+        var slots = st.confirmed_slots !== undefined ? st.confirmed_slots : 0;
+        var present = st.present !== undefined ? st.present : 0;
+        var rate = (st.attendance_rate !== undefined && st.attendance_rate !== null)
+          ? Math.round(st.attendance_rate * 100) + '%' : '-';
+        statsResult.innerHTML = '<div class="stat-grid">'
+          + '<div class="stat-card"><p class="stat-label">開催回数</p><p class="stat-value">' + UI().esc(held) + '</p></div>'
+          + '<div class="stat-card"><p class="stat-label">確定枠</p><p class="stat-value">' + UI().esc(slots) + '</p></div>'
+          + '<div class="stat-card"><p class="stat-label">出席数</p><p class="stat-value">' + UI().esc(present) + '</p></div>'
+          + '<div class="stat-card"><p class="stat-label">出席率</p><p class="stat-value">' + UI().esc(rate) + '</p></div>'
+          + '</div>'
+          + '<p class="stat-sub">出席数 ÷ 確定枠（中止を除く。休会中の月は除く）</p>';
+      } catch (e) {
+        statsResult.innerHTML = '<p class="danger-text">月次統計を取得できませんでした。' + UI().esc(e && e.message ? e.message : '') + '</p>';
       }
     });
     view.appendChild(statsSec);
