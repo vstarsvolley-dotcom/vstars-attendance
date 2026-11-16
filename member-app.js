@@ -122,6 +122,23 @@
 
   function route() {
     var hash = window.location.hash || '#/';
+    // 招待・パスワード再設定リンクから来た場合: Supabase が hash の
+    // access_token をセッション化してから管理画面へ誘導する。
+    // (このままルーティングすると #/login へ飛んで token が消えてしまうため)
+    if (hash.indexOf('type=recovery') !== -1 || hash.indexOf('type=invite') !== -1) {
+      try { window.sessionStorage.setItem('vstars_set_password', '1'); } catch (e) {}
+      var api = getApi();
+      if (api && api.getAdminSession) {
+        api.getAdminSession().then(function () {
+          window.location.hash = '#/admin';
+        }).catch(function () {
+          window.location.hash = '#/admin';
+        });
+      } else {
+        window.location.hash = '#/admin';
+      }
+      return;
+    }
     var path = hash.replace(/^#/, '').split('?')[0] || '/';
     if (path === '') { path = '/'; }
     var parts = path.split('/').filter(function (s) { return s !== ''; });

@@ -14,7 +14,9 @@
     // 招待・パスワード再設定リンクから来た場合 (#access_token&...&type=recovery/invite):
     // ログイン画面ではなく新しいパスワードの設定画面を出す。
     var hash = window.location.hash || '';
-    if (hash.indexOf('type=recovery') !== -1 || hash.indexOf('type=invite') !== -1) {
+    var setPwFlag = false;
+    try { setPwFlag = window.sessionStorage.getItem('vstars_set_password') === '1'; } catch (e) {}
+    if (hash.indexOf('type=recovery') !== -1 || hash.indexOf('type=invite') !== -1 || setPwFlag) {
       renderSetPassword(view);
       return;
     }
@@ -153,6 +155,7 @@
       submit.textContent = '設定中…';
       try {
         await Api().updateAdminPassword(pw1.value);
+        try { window.sessionStorage.removeItem('vstars_set_password'); } catch (e) {}
         UI().toast('パスワードを設定しました。');
         window.location.hash = '#/admin';
         window.VstarsAdminApp.renderAdmin('#/admin');
@@ -168,5 +171,5 @@
     pw1.focus();
   }
 
-  window.VstarsAdminAuth = { renderAdminLogin: renderAdminLogin };
+  window.VstarsAdminAuth = { renderAdminLogin: renderAdminLogin, renderSetPassword: renderSetPassword };
 })();

@@ -60,6 +60,13 @@
       window.VstarsAdminAuth.renderAdminLogin();
       return;
     }
+    // 招待・再設定リンク経由ならパスワード設定画面を出す。
+    var setPw = false;
+    try { setPw = window.sessionStorage.getItem('vstars_set_password') === '1'; } catch (e) {}
+    if (setPw && window.VstarsAdminAuth.renderSetPassword) {
+      window.VstarsAdminAuth.renderSetPassword(view);
+      return;
+    }
     var parts = (path || '#/admin').replace(/^#/, '').split('/').filter(function (s) { return s !== ''; });
     var sub = parts[1] || '';
     switch (sub) {
