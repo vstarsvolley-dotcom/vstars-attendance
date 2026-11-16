@@ -16,6 +16,11 @@
 
 * { box-sizing: border-box; }
 
+/* hidden 属性は display:flex 等の指定より優先させる。
+   (これがないと .sheet-backdrop 等が hidden でも表示され、
+    半透明の幕が画面全体を覆って入力できなくなる) */
+[hidden] { display: none !important; }
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {
