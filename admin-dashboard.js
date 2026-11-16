@@ -167,7 +167,8 @@ if (confirmed === null) { confirmed = counts.male + counts.female + counts.other
 } catch (e) { /* 集計が取れなくても行は表示する */}
 var line = document.createElement('p');
 line.style.margin = '0 0 8px';
-line.textContent = UI().fmtDateTimeJST(p.practice_date, p.start_time, p.end_time) + ' ' + (p.venue || '')
+var kindPrefix = (p.kind === 'match' || p.kind === 'tournament') ? '［' + UI().kindLabel(p.kind) + '］' : '';
+line.textContent = kindPrefix + UI().fmtDateTimeJST(p.practice_date, p.start_time, p.end_time) + ' ' + (p.venue || '')
 + ' — 確定 ' + (confirmed === null? '—': confirmed) + '/' + (p.capacity!== undefined? p.capacity: 18)
 + '（男 ' + counts.male + '・女 ' + counts.female + '・その他 ' + (counts.other + counts.prefer_not_to_say) + '）'
 + (waitlisted > 0? ' 待ち ' + waitlisted + '名': '');

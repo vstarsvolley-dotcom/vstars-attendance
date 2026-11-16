@@ -190,8 +190,149 @@
     }
   }
 
-  function positionLabel(p) {
-    if (Array.isArray(p)) {
+  // 練習の種別 (SQL 17: practices.kind)。
+  // practice=練習 / match=練習試合 / tournament=大会。
+  function kindLabel(kind) {
+    switch (kind) {
+      case 'match': return '練習試合';
+      case 'tournament': return '大会';
+      case 'practice':
+      default: return '練習';
+    }
+  }
+
+  function kindClass(kind) {
+    switch (kind) {
+      case 'match': return 'kind-match';
+      case 'tournament': return 'kind-tournament';
+      case 'practice':
+      default: return 'kind-practice';
+    }
+  }
+
+  function isMatchOrTournament(practice) {
+    var k = practice && (practice.kind || practice.practice_kind);
+    return k === 'match' || k === 'tournament';
+  }
+
+  // 確定数の表示。試合・大会は男女別 (男 X/Y・女 A/B)。
+  // その他 (other / prefer_not_to_say) がいれば「・その他 N名」を付ける。
+  // 練習は従来通り「確定 n / 定員名」。
+  function genderCountsText(practice) {
+    var confirmed = practice.confirmed_count !== undefined ? practice.confirmed_count
+      : (practice.confirmedCount !== undefined ? practice.confirmedCount : 0);
+    var waitlist = practice.waitlist_count !== undefined ? practice.waitlist_count
+      : (practice.waitlistCount !== undefined ? practice.waitlistCount : 0);
+    var waitText = waitlist > 0 ? '　待ち ' + waitlist + '名' : '';
+    if (!isMatchOrTournament(practice)) {
+      var capacity = practice.capacity !== undefined ? practice.capacity : 18;
+      return '確定 ' + confirmed + ' / ' + capacity + '名' + waitText;
+    }
+    var men = practice.confirmed_men !== undefined ? practice.confirmed_men
+      : (practice.confirmedMen !== undefined ? practice.confirmedMen : 0);
+    var women = practice.confirmed_women !== undefined ? practice.confirmed_women
+      : (practice.confirmedWomen !== undefined ? practice.confirmedWomen : 0);
+    var other = practice.confirmed_other !== undefined ? practice.confirmed_other
+      : (practice.confirmedOther !== undefined ? practice.confirmedOther : 0);
+    var capMen = practice.capacity_men !== undefined ? practice.capacity_men
+      : (practice.capacityMen !== undefined ? practice.capacityMen : 0);
+    var capWomen = practice.capacity_women !== undefined ? practice.capacity_women
+      : (practice.capacityWomen !== undefined ? practice.capacityWomen : 0);
+    var text = '男 ' + men + '/' + capMen + '・女 ' + women + '/' + capWomen;
+    if (other > 0) { text += '・その他 ' + other + '名'; }
+    return text + waitText;
+  }
+
+  // JST の今日を 'YYYY-MM-DD' で返す (端末のタイムゾーンに依存しない)。
+  function jstTodayStr() {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+  }
+
+  function dateKey(year, month, day) {
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    return year + '-' + pad(month) + '-' + pad(day);
+  }
+
+  // 月カレンダーのグリッドを作る。会員・管理者で共用する。
+  // opts: { year, month, days: {'YYYY-MM-DD': [practice, ...]},
+  //         selectedDate, onSelect(dateStr), todayStr }
+  // 日を押すと onSelect が呼ばれる。練習がある日には種別色のドットを付ける。
+  // 練習=紺、練習試合=緑、大会=黄 (黄は紺の輪郭付き)。
+  function renderCalendarGrid(opts) {
+    opts = opts || {};
+    var year = opts.year;
+    var month = opts.month;
+    var days = opts.days || {};
+    var selected = opts.selectedDate || '';
+    var today = opts.todayStr || jstTodayStr();
+
+    var wrap = document.createElement('div');
+    wrap.className = 'calendar';
+
+    var grid = document.createElement('div');
+    grid.className = 'calendar-grid';
+    ['日', '月', '火', '水', '木', '金', '土'].forEach(function (w) {
+      var h = document.createElement('div');
+      h.className = 'cal-weekday';
+      h.textContent = w;
+      grid.appendChild(h);
+    });
+
+    var firstWd = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+    // その月の日数: 翌月0日 = 当月の末日 (Date.UTC の月は 0 起点のため
+    // month をそのまま渡すと翌月になる点に注意)。
+    var daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    var i;
+    for (i = 0; i < firstWd; i++) {
+      var blank = document.createElement('div');
+      blank.className = 'cal-day cal-blank';
+      grid.appendChild(blank);
+    }
+    for (var d = 1; d <= daysInMonth; d++) {
+      (function (day) {
+        var key = dateKey(year, month, day);
+        var list = days[key] || [];
+        var cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'cal-day';
+        if (key === today) { cell.classList.add('cal-today'); }
+        if (key === selected) { cell.classList.add('cal-selected'); }
+        if (key < today) { cell.classList.add('cal-past'); }
+        var num = document.createElement('span');
+        num.className = 'cal-num';
+        num.textContent = String(day);
+        cell.appendChild(num);
+        if (list.length > 0) {
+          var dots = document.createElement('span');
+          dots.className = 'cal-dots';
+          list.slice(0, 3).forEach(function (p) {
+            var dot = document.createElement('span');
+            var k = p.kind || 'practice';
+            dot.className = 'cal-dot cal-dot-' + (k === 'match' ? 'match' : k === 'tournament' ? 'tournament' : 'practice');
+            dot.title = kindLabel(k);
+            dots.appendChild(dot);
+          });
+          cell.appendChild(dots);
+          if (list.length > 3) {
+            var more = document.createElement('span');
+            more.className = 'cal-more';
+            more.textContent = '他' + (list.length - 3) + '件';
+            cell.appendChild(more);
+          }
+        }
+        cell.addEventListener('click', function () {
+          if (opts.onSelect) { opts.onSelect(key); }
+        });
+        grid.appendChild(cell);
+      })(d);
+    }
+    wrap.appendChild(grid);
+    return wrap;
+  }
+
+  function positionLabel(p) {    if (Array.isArray(p)) {
       if (p.length === 0) { return '—'; }
       return p.map(positionLabel).join('・');
     }
@@ -251,11 +392,6 @@
     handlers = handlers || {};
     var id = practice.practice_id || practice.id;
     var date = practice.practice_date || practice.date;
-    var confirmed = practice.confirmed_count !== undefined ? practice.confirmed_count
-      : (practice.confirmedCount !== undefined ? practice.confirmedCount : 0);
-    var capacity = practice.capacity !== undefined ? practice.capacity : 18;
-    var waitlist = practice.waitlist_count !== undefined ? practice.waitlist_count
-      : (practice.waitlistCount !== undefined ? practice.waitlistCount : 0);
     var cancelled = practice.is_cancelled || practice.cancelled || practice.status === 'cancelled';
     var myStatus = statusLabel(practice);
     var myRegId = practice.my_registration_id || practice.registration_id || null;
@@ -270,6 +406,10 @@
     dateEl.className = 'practice-date';
     dateEl.textContent = fmtDateTimeJST(date, practice.start_time, practice.end_time);
     head.appendChild(dateEl);
+    var kindBadge = document.createElement('span');
+    kindBadge.className = 'badge kind-badge ' + kindClass(practice.kind || 'practice');
+    kindBadge.textContent = kindLabel(practice.kind || 'practice');
+    head.appendChild(kindBadge);
     var statusEl = document.createElement('span');
     statusEl.className = 'status-badge ' + statusClass(practice);
     statusEl.textContent = myStatus;
@@ -283,8 +423,7 @@
 
     var counts = document.createElement('p');
     counts.className = 'practice-counts';
-    counts.textContent = '確定 ' + confirmed + ' / ' + capacity + '名'
-      + (waitlist > 0 ? '　待ち ' + waitlist + '名' : '');
+    counts.textContent = genderCountsText(practice);
     card.appendChild(counts);
 
     if (cancelled) {
@@ -299,19 +438,23 @@
 
     if (!cancelled) {
       if (myStatus === '未申込') {
-        var sel = document.createElement('label');
-        sel.className = 'bulk-select';
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.className = 'bulk-checkbox';
-        cb.setAttribute('aria-label', fmtDateTimeJST(date, practice.start_time, practice.end_time) + ' をまとめ申し込みに選択');
-        cb.checked = !!(handlers.selected && handlers.selected.has(String(id)));
-        cb.addEventListener('change', function () {
-          if (handlers.onToggleSelect) { handlers.onToggleSelect(id, cb.checked); }
-        });
-        sel.appendChild(cb);
-        sel.appendChild(document.createTextNode('まとめ申し込み'));
-        actions.appendChild(sel);
+        // まとめ申し込みのチェックボックスは、一覧画面でのみ出す。
+        // カレンダーの当日一覧では onToggleSelect を渡さないため出ない。
+        if (handlers.onToggleSelect) {
+          var sel = document.createElement('label');
+          sel.className = 'bulk-select';
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.className = 'bulk-checkbox';
+          cb.setAttribute('aria-label', fmtDateTimeJST(date, practice.start_time, practice.end_time) + ' をまとめ申し込みに選択');
+          cb.checked = !!(handlers.selected && handlers.selected.has(String(id)));
+          cb.addEventListener('change', function () {
+            if (handlers.onToggleSelect) { handlers.onToggleSelect(id, cb.checked); }
+          });
+          sel.appendChild(cb);
+          sel.appendChild(document.createTextNode('まとめ申し込み'));
+          actions.appendChild(sel);
+        }
 
         var applyBtn = document.createElement('button');
         applyBtn.type = 'button';
@@ -363,6 +506,8 @@
     too_many_practices: '一度に申し込めるのは50件までです。',
     too_many_requests: '短時間に何度も申請されています。しばらく待ってからもう一度お試しください。',
     duplicate_request: '同じ名前の申請または登録がすでにあります。管理者にお問い合わせください。',
+    invalid_kind: '種別が正しくありません。',
+    invalid_month: '月が正しくありません。',
     unauthorized: 'ログインし直してください。',
     bind_limit: '短時間に何度も端末を切り替えています。しばらく待ってからもう一度お試しください。',
     invalid_device_token: '端末の認証情報が無効です。ログインし直してください。'
@@ -381,6 +526,13 @@
     fmtDateTimeJST: fmtDateTimeJST,
     fmtDateJST: fmtDateJST,
     fmtMonthJST: fmtMonthJST,
+    jstTodayStr: jstTodayStr,
+    dateKey: dateKey,
+    renderCalendarGrid: renderCalendarGrid,
+    kindLabel: kindLabel,
+    kindClass: kindClass,
+    isMatchOrTournament: isMatchOrTournament,
+    genderCountsText: genderCountsText,
     esc: esc,
     toast: toast,
     confirmSheet: confirmSheet,

@@ -52,6 +52,14 @@
     lead.textContent = '申し込みたい練習を選んでください。定員を超えた場合は待ちになります。';
     view.appendChild(lead);
 
+    var calLink = document.createElement('p');
+    calLink.className = 'view-link';
+    var calA = document.createElement('a');
+    calA.href = '#/calendar';
+    calA.textContent = 'カレンダーで見る →';
+    calLink.appendChild(calA);
+    view.appendChild(calLink);
+
     if (practicesCache.length === 0) {
       UI().showEmpty(view, '申し込める練習がありません。');
       return;

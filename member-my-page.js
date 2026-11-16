@@ -123,7 +123,8 @@
         row.className = 'row';
         var d = document.createElement('span');
         d.className = 'date';
-        d.textContent = UI().fmtDateTimeJST(date, r.start_time, r.end_time) + ' ' + (r.venue || '');
+        var kindText = r.kind ? '［' + UI().kindLabel(r.kind) + '］' : '';
+        d.textContent = kindText + UI().fmtDateTimeJST(date, r.start_time, r.end_time) + ' ' + (r.venue || '');
         row.appendChild(d);
         var badge = document.createElement('span');
         badge.className = 'status-badge ' + UI().statusClass(r);

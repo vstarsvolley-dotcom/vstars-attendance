@@ -172,6 +172,12 @@
         markNav('practices');
         window.VstarsMemberPractices.renderPractices();
         break;
+      case 'calendar':
+        if (!isLoggedIn()) { window.location.hash = '#/login'; return; }
+        markNav('calendar');
+        hideBulkBar();
+        window.VstarsMemberCalendar.renderCalendar();
+        break;
       case 'mypage':
         if (!isLoggedIn()) { window.location.hash = '#/login'; return; }
         markNav('mypage');

@@ -12,6 +12,13 @@
 
   function pid(p) { return p.practice_id || p.id; }
 
+  // 管理カレンダーの表示状態 (一覧/カレンダー切替)。
+  var calMode = 'list';
+  var calYear = 0;
+  var calMonth = 0;
+  var calSelected = '';
+  var adminCache = [];
+
   // LINE 名 + 会員番号の選択肢を作る (list_member_names は LINE 名と会員番号のみ返す)
   async function fillMemberSelect(selectEl) {
     selectEl.innerHTML = '<option value="">選択してください</option>';
@@ -38,11 +45,30 @@
     createBtn.textContent = '＋ 練習を作成';
     createBtn.addEventListener('click', function () { showPracticeForm(view, null); });
     toolbar.appendChild(createBtn);
+    var listBtn = document.createElement('button');
+    listBtn.type = 'button';
+    listBtn.className = 'btn btn-ghost btn-small';
+    listBtn.textContent = '一覧';
+    var calBtn = document.createElement('button');
+    calBtn.type = 'button';
+    calBtn.className = 'btn btn-ghost btn-small';
+    calBtn.textContent = 'カレンダー';
+    toolbar.appendChild(listBtn);
+    toolbar.appendChild(calBtn);
     view.appendChild(toolbar);
 
     var listWrap = document.createElement('div');
     view.appendChild(listWrap);
-    refreshList(listWrap);
+
+    function showView() {
+      listBtn.setAttribute('aria-pressed', calMode === 'list' ? 'true' : 'false');
+      calBtn.setAttribute('aria-pressed', calMode === 'calendar' ? 'true' : 'false');
+      if (calMode === 'calendar') { renderAdminCalendar(listWrap); }
+      else { refreshList(listWrap); }
+    }
+    listBtn.addEventListener('click', function () { calMode = 'list'; showView(); });
+    calBtn.addEventListener('click', function () { calMode = 'calendar'; showView(); });
+    showView();
 
     var ruleSec = document.createElement('section');
     var ruleTitle = document.createElement('h2');
@@ -98,6 +124,36 @@
     capI.min = '1';
     capI.max = '100';
 
+    // 種別 (SQL 17)。試合・大会のときだけ男女別定員を出す。
+    var kindSel = document.createElement('select');
+    [['practice', '練習'], ['match', '練習試合'], ['tournament', '大会']].forEach(function (kv) {
+      var o = document.createElement('option');
+      o.value = kv[0];
+      o.textContent = kv[1];
+      kindSel.appendChild(o);
+    });
+    kindSel.value = practice ? (practice.kind || 'practice') : 'practice';
+    fieldRow(form, '種別', kindSel);
+    var capMenI = fieldRow(form, '男性マックス', inputOf('number',
+      practice && practice.capacity_men !== undefined && practice.capacity_men !== null ? practice.capacity_men : 6, true));
+    capMenI.min = '1';
+    capMenI.max = '100';
+    var capWomenI = fieldRow(form, '女性マックス', inputOf('number',
+      practice && practice.capacity_women !== undefined && practice.capacity_women !== null ? practice.capacity_women : 6, true));
+    capWomenI.min = '1';
+    capWomenI.max = '100';
+    var capRow = capI.closest('.field');
+    var capMenRow = capMenI.closest('.field');
+    var capWomenRow = capWomenI.closest('.field');
+    function toggleGenderCaps() {
+      var gendered = kindSel.value === 'match' || kindSel.value === 'tournament';
+      if (capRow) { capRow.hidden = gendered; }
+      if (capMenRow) { capMenRow.hidden = !gendered; }
+      if (capWomenRow) { capWomenRow.hidden = !gendered; }
+    }
+    kindSel.addEventListener('change', toggleGenderCaps);
+    toggleGenderCaps();
+
     var err = document.createElement('p');
     err.className = 'field-error';
     err.hidden = true;
@@ -123,24 +179,41 @@
         err.hidden = false;
         return;
       }
-      var cap = parseInt(capI.value, 10);
-      if (!cap || cap < 1 || cap > 100) {
-        err.textContent = '定員は1〜100人で入力してください。';
-        err.hidden = false;
-        return;
+      var kind = kindSel.value;
+      var isGendered = kind === 'match' || kind === 'tournament';
+      var cap = null;
+      var capMen = null;
+      var capWomen = null;
+      if (isGendered) {
+        capMen = parseInt(capMenI.value, 10);
+        capWomen = parseInt(capWomenI.value, 10);
+        if (!capMen || capMen < 1 || capMen > 100 || !capWomen || capWomen < 1 || capWomen > 100) {
+          err.textContent = '男性マックス・女性マックスは1〜100人で入力してください。';
+          err.hidden = false;
+          return;
+        }
+      } else {
+        cap = parseInt(capI.value, 10);
+        if (!cap || cap < 1 || cap > 100) {
+          err.textContent = '定員は1〜100人で入力してください。';
+          err.hidden = false;
+          return;
+        }
       }
       submit.disabled = true;
       try {
         if (isEdit) {
           await Api().adminUpdatePractice(pid(practice), {
             date: dateI.value, startTime: startI.value, endTime: endI.value,
-            venue: venueI.value.trim(), capacity: cap
+            venue: venueI.value.trim(), capacity: cap,
+            kind: kind, capacityMen: capMen, capacityWomen: capWomen
           });
           UI().toast('練習を更新しました。');
         } else {
           await Api().adminCreatePractice({
             date: dateI.value, startTime: startI.value, endTime: endI.value,
-            venue: venueI.value.trim(), capacity: cap, ruleId: null
+            venue: venueI.value.trim(), capacity: cap, ruleId: null,
+            kind: kind, capacityMen: capMen, capacityWomen: capWomen
           });
           UI().toast('練習を作成しました。');
         }
@@ -186,6 +259,132 @@
     wrap.appendChild(container);
   }
 
+  // ---- 管理カレンダー (一覧と切り替え。会員カレンダーと同じ見た目) ----
+  function adminTodayParts() {
+    var t = UI().jstTodayStr().split('-');
+    return { year: parseInt(t[0], 10), month: parseInt(t[1], 10) };
+  }
+
+  function shiftAdminMonth(dm) {
+    var m = calMonth + dm;
+    var y = calYear;
+    while (m < 1) { m += 12; y -= 1; }
+    while (m > 12) { m -= 12; y += 1; }
+    calYear = y;
+    calMonth = m;
+    calSelected = '';
+  }
+
+  async function renderAdminCalendar(wrap) {
+    wrap.innerHTML = '<p>読み込み中…</p>';
+    var practices;
+    try {
+      practices = await Api().adminListPractices();
+    } catch (e) {
+      UI().showError(wrap, '練習一覧を取得できませんでした。' + (e && e.message ? ' ' + e.message : ''), function () { renderAdminCalendar(wrap); });
+      return;
+    }
+    adminCache = Array.isArray(practices) ? practices : [];
+    drawAdminCalendar(wrap);
+  }
+
+  function drawAdminCalendar(wrap) {
+    wrap.innerHTML = '';
+    var t = adminTodayParts();
+    if (!calYear) {
+      calYear = t.year;
+      calMonth = t.month;
+      calSelected = UI().jstTodayStr();
+    }
+
+    var nav = document.createElement('div');
+    nav.className = 'calendar-nav';
+    var prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.className = 'btn btn-ghost btn-small';
+    prevBtn.textContent = '‹ 前月';
+    prevBtn.addEventListener('click', function () { shiftAdminMonth(-1); drawAdminCalendar(wrap); });
+    var monthLabel = document.createElement('span');
+    monthLabel.className = 'cal-month';
+    monthLabel.textContent = UI().fmtMonthJST(calYear, calMonth);
+    var nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.className = 'btn btn-ghost btn-small';
+    nextBtn.textContent = '次月 ›';
+    nextBtn.addEventListener('click', function () { shiftAdminMonth(1); drawAdminCalendar(wrap); });
+    var todayBtn = document.createElement('button');
+    todayBtn.type = 'button';
+    todayBtn.className = 'btn btn-ghost btn-small';
+    todayBtn.textContent = '今月';
+    todayBtn.addEventListener('click', function () {
+      var tt = adminTodayParts();
+      calYear = tt.year;
+      calMonth = tt.month;
+      calSelected = UI().jstTodayStr();
+      drawAdminCalendar(wrap);
+    });
+    nav.appendChild(prevBtn);
+    nav.appendChild(monthLabel);
+    nav.appendChild(nextBtn);
+    nav.appendChild(todayBtn);
+    wrap.appendChild(nav);
+
+    var legend = document.createElement('p');
+    legend.className = 'muted cal-legend';
+    legend.innerHTML = '<span class="cal-dot cal-dot-practice"></span> 練習　'
+      + '<span class="cal-dot cal-dot-match"></span> 練習試合　'
+      + '<span class="cal-dot cal-dot-tournament"></span> 大会';
+    wrap.appendChild(legend);
+
+    var days = {};
+    adminCache.forEach(function (p) {
+      var key = String(p.practice_date || p.date || '').slice(0, 10);
+      if (!key) { return; }
+      if (!days[key]) { days[key] = []; }
+      days[key].push(p);
+    });
+
+    wrap.appendChild(UI().renderCalendarGrid({
+      year: calYear,
+      month: calMonth,
+      days: days,
+      selectedDate: calSelected,
+      onSelect: function (dateStr) {
+        calSelected = dateStr;
+        drawAdminCalendar(wrap);
+      }
+    }));
+
+    var daySec = document.createElement('div');
+    daySec.className = 'cal-day-list';
+    if (!calSelected) {
+      var hint = document.createElement('p');
+      hint.className = 'muted';
+      hint.textContent = '日をタップすると、その日の練習が出ます。';
+      daySec.appendChild(hint);
+    } else {
+      var h = document.createElement('h2');
+      h.className = 'section-title';
+      h.textContent = UI().fmtDateJST(calSelected) + ' の予定';
+      daySec.appendChild(h);
+      var list = days[calSelected] || [];
+      if (list.length === 0) {
+        var empty = document.createElement('p');
+        empty.className = 'muted';
+        empty.textContent = 'この日は練習・試合・大会がありません。';
+        daySec.appendChild(empty);
+      } else {
+        var container = document.createElement('div');
+        container.className = 'practice-list';
+        list.forEach(function (p) {
+          container.appendChild(practiceCard(p, wrap));
+        });
+        daySec.appendChild(container);
+      }
+    }
+    wrap.appendChild(daySec);
+  }
+
   function practiceCard(p, wrap) {
     var card = document.createElement('article');
     card.className = 'practice-card';
@@ -195,6 +394,10 @@
     dateEl.className = 'practice-date';
     dateEl.textContent = UI().fmtDateTimeJST(p.practice_date, p.start_time, p.end_time);
     head.appendChild(dateEl);
+    var kindBadge = document.createElement('span');
+    kindBadge.className = 'badge kind-badge ' + UI().kindClass(p.kind || 'practice');
+    kindBadge.textContent = UI().kindLabel(p.kind || 'practice');
+    head.appendChild(kindBadge);
     if (p.is_cancelled) {
       var b = document.createElement('span');
       b.className = 'badge badge-red';
@@ -216,9 +419,13 @@
 
     var counts = document.createElement('p');
     counts.className = 'practice-counts';
-    counts.textContent = '定員: ' + (p.capacity !== undefined ? p.capacity : 18) + '人'
-      + (p.confirmed_count !== undefined ? '　確定 ' + p.confirmed_count + '人' : '')
-      + (p.waitlist_count !== undefined && p.waitlist_count > 0 ? '　待ち ' + p.waitlist_count + '人' : '');
+    if (UI().isMatchOrTournament(p)) {
+      counts.textContent = UI().genderCountsText(p);
+    } else {
+      counts.textContent = '定員: ' + (p.capacity !== undefined ? p.capacity : 18) + '人'
+        + (p.confirmed_count !== undefined ? '　確定 ' + p.confirmed_count + '人' : '')
+        + (p.waitlist_count !== undefined && p.waitlist_count > 0 ? '　待ち ' + p.waitlist_count + '人' : '');
+    }
     card.appendChild(counts);
 
     var detail = document.createElement('div');
@@ -320,7 +527,9 @@
           try {
             await Api().adminProxyCancel(btn.getAttribute('data-reg'), '管理者による代理キャンセル');
             UI().toast('代理キャンセルしました。');
-            refreshList(wrap);
+            // カレンダー表示中でも一覧表示中でも、表示モードを維持したまま
+            // 全体を描画し直す (refreshList だとカレンダーが一覧に戻るため)。
+            renderAdminPractices();
           } catch (e) { UI().toast('代理キャンセルに失敗しました。' + (e && e.message ? ' ' + e.message : '')); }
         });
       });
@@ -336,6 +545,53 @@
     // ブラウザ標準の min チェックだと定員0が無言で止まるため、
     // JS 側のチェックを必ず通す (E2-4)。
     form.noValidate = true;
+
+    // 試合・大会は男女別定員を変更する (SQL 17)。
+    if (UI().isMatchOrTournament(p)) {
+      var curMen = p.capacity_men !== undefined && p.capacity_men !== null ? p.capacity_men : 6;
+      var curWomen = p.capacity_women !== undefined && p.capacity_women !== null ? p.capacity_women : 6;
+      var menI = fieldRow(form, '男性マックス（現在 ' + curMen + '人）', inputOf('number', curMen, true));
+      menI.min = '1';
+      menI.max = '100';
+      var womenI = fieldRow(form, '女性マックス（現在 ' + curWomen + '人）', inputOf('number', curWomen, true));
+      womenI.min = '1';
+      womenI.max = '100';
+      var noteG = document.createElement('p');
+      noteG.className = 'muted';
+      noteG.textContent = '定員を減らすと、その性別の確定が遅い順に待ちに戻ります。';
+      form.appendChild(noteG);
+      var submitG = document.createElement('button');
+      submitG.type = 'submit';
+      submitG.className = 'btn btn-navy';
+      submitG.textContent = '定員を変更';
+      form.appendChild(submitG);
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var nextMen = parseInt(menI.value, 10);
+        var nextWomen = parseInt(womenI.value, 10);
+        if (!nextMen || nextMen < 1 || nextMen > 100 || !nextWomen || nextWomen < 1 || nextWomen > 100) {
+          UI().toast('男性マックス・女性マックスは1〜100人で入力してください。');
+          return;
+        }
+        if (nextMen < curMen || nextWomen < curWomen) {
+          var ok = await UI().confirmSheet({
+            title: '定員を減らしますか？',
+            body: '男性マックスを ' + curMen + '人から ' + nextMen + '人、女性マックスを ' + curWomen + '人から ' + nextWomen + '人に変更します。減らした枠は、確定が遅い順にメンバーが待ちに戻ります。',
+            okLabel: '減らす', danger: true
+          });
+          if (!ok) { return; }
+        }
+        try {
+          await Api().adminChangeCapacity(pid(p), null, nextMen, nextWomen);
+          UI().toast('定員を変更しました。');
+          renderAdminPractices();
+        } catch (ex) { UI().toast('定員変更に失敗しました。' + (ex && ex.message ? ' ' + ex.message : '')); }
+      });
+      detail.appendChild(form);
+      menI.focus();
+      return;
+    }
+
     var cur = p.capacity !== undefined ? p.capacity : 18;
     var input = fieldRow(form, '新しい定員（現在 ' + cur + '人）', inputOf('number', cur, true));
     input.min = '1';

@@ -176,6 +176,9 @@
       });
     },
     listPractices: function () { return callRpc('list_practices', { p_token: getToken() }); },
+    listPracticesForMonth: function (year, month) {
+      return callRpc('list_practices_for_month', { p_token: getToken(), p_year: year, p_month: month });
+    },
     applyPractice: function (practiceId) {
       return callRpc('apply_practice', { p_token: getToken(), p_practice_id: practiceId });
     },
@@ -235,13 +238,19 @@
     adminCreatePractice: function (p) {
       return callRpc('admin_create_practice', {
         p_practice_date: p.date, p_start_time: p.startTime, p_end_time: p.endTime,
-        p_venue: p.venue, p_capacity: p.capacity, p_rule_id: p.ruleId || null
+        p_venue: p.venue, p_capacity: p.capacity, p_rule_id: p.ruleId || null,
+        p_kind: p.kind || 'practice',
+        p_capacity_men: p.capacityMen !== undefined ? p.capacityMen : null,
+        p_capacity_women: p.capacityWomen !== undefined ? p.capacityWomen : null
       });
     },
     adminUpdatePractice: function (practiceId, p) {
       return callRpc('admin_update_practice', {
         p_practice_id: practiceId, p_practice_date: p.date, p_start_time: p.startTime,
-        p_end_time: p.endTime, p_venue: p.venue, p_capacity: p.capacity
+        p_end_time: p.endTime, p_venue: p.venue, p_capacity: p.capacity,
+        p_kind: p.kind || null,
+        p_capacity_men: p.capacityMen !== undefined ? p.capacityMen : null,
+        p_capacity_women: p.capacityWomen !== undefined ? p.capacityWomen : null
       });
     },
     adminCancelPractice: function (practiceId, reason) {
@@ -250,8 +259,12 @@
     adminRestorePractice: function (practiceId) {
       return callRpc('admin_restore_practice', { p_practice_id: practiceId });
     },
-    adminChangeCapacity: function (practiceId, capacity) {
-      return callRpc('admin_change_capacity', { p_practice_id: practiceId, p_capacity: capacity });
+    adminChangeCapacity: function (practiceId, capacity, capacityMen, capacityWomen) {
+      return callRpc('admin_change_capacity', {
+        p_practice_id: practiceId, p_capacity: capacity,
+        p_capacity_men: capacityMen !== undefined ? capacityMen : null,
+        p_capacity_women: capacityWomen !== undefined ? capacityWomen : null
+      });
     },
     adminGetPracticeRoster: function (practiceId) {
       return callRpc('admin_get_practice_roster', { p_practice_id: practiceId });
