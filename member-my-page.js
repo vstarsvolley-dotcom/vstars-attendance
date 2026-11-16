@@ -61,6 +61,9 @@
       ['LINE 名', lineName || '—'],
       ['会員番号', memberNo !== null && memberNo !== undefined ? String(memberNo) : '—'],
       ['会員区分', typeText],
+      ['年齢', (page.age !== undefined && page.age !== null) ? String(page.age) + '歳' : '—'],
+      ['バレー歴', page.volleyball_experience || page.volleyballExperience || '—'],
+      ['ポジション', UI().positionLabel(page.volleyball_position || '')],
       ['休会状態', leaveText]
     ].forEach(function (kv) {
       var li = document.createElement('li');

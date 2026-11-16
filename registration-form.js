@@ -78,6 +78,19 @@ genderSel.appendChild(o);
 });
 fieldRow(form, '性別 (必須)', genderSel);
 var birthI = fieldRow(form, '生年月日 (任意)', inputOf('date', '', false));
+var ageI = fieldRow(form, '年齢 (任意・生年月日が無い場合)', inputOf('number', '', false, '例: 28'));
+ageI.min = '0';
+ageI.max = '120';
+var expI = fieldRow(form, 'バレー歴 (任意)', inputOf('text', '', false, '例: 高校3年・大学サークル2年'));
+expI.maxLength = 500;
+var posSel = document.createElement('select');
+[['', '選択してください'], ['setter', 'セッター'], ['outside', 'レフト'], ['middle', 'センター'], ['opposite', 'ライト'], ['libero', 'リベロ'], ['undecided', '未定']].forEach(function (kv) {
+var o = document.createElement('option');
+o.value = kv[0];
+o.textContent = kv[1];
+posSel.appendChild(o);
+});
+fieldRow(form, 'ポジション (任意)', posSel);
 
 var apiKeyI = null;
 if (agentMode) {
@@ -95,7 +108,7 @@ form.appendChild(consentLabel);
 
 var privacy = document.createElement('p');
 privacy.className = 'muted';
-privacy.textContent = '入力いただいた本名・LINE名・性別・生年月日は、Vstars の出欠管理と連絡のためにのみ使用します。管理者以外には本名と生年月日は表示されません。退会が確定したメンバーのデータは 1 年後に削除されます。同意いただけない場合は登録できません。';
+privacy.textContent = '入力いただいた本名・LINE名・性別・生年月日・年齢・バレー歴・ポジションは、Vstars の出欠管理と連絡のためにのみ使用します。管理者以外には本名と生年月日は表示されません。退会が確定したメンバーのデータは 1 年後に削除されます。同意いただけない場合は登録できません。';
 form.appendChild(privacy);
 
 var errEl = document.createElement('p');
@@ -117,6 +130,12 @@ var realName = realI.value.trim();
 var lineName = lineI.value.trim();
 var gender = genderSel.value;
 var birthDate = birthI.value || null;
+var ageVal = ageI.value === '' ? null : parseInt(ageI.value, 10);
+if (ageVal !== null && (isNaN(ageVal) || ageVal < 0 || ageVal > 120)) {
+errEl.textContent = '年齢は 0〜120 の数字で入力してください。';
+errEl.hidden = false;
+return;
+}
 if (!realName ||!lineName ||!gender) {
 errEl.textContent = '本名・LINE名・性別は必須です。';
 errEl.hidden = false;
@@ -130,7 +149,7 @@ return;
 submit.disabled = true;
 submit.textContent = '送信中…';
 try {
-var req = { realName: realName, lineName: lineName, gender: gender, birthDate: birthDate, consent: true};
+var req = { realName: realName, lineName: lineName, gender: gender, birthDate: birthDate, consent: true, age: ageVal, volleyballExperience: expI.value.trim() || null, position: posSel.value || null };
 if (agentMode) {
 // API キーはこのページセッション中の変数にのみ保持する
 agentApiKey = apiKeyI.value;

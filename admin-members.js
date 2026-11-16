@@ -123,6 +123,9 @@
         var p = document.createElement('p');
         p.textContent = '性別: ' + UI().genderLabel(m.gender) + ' ｜ ステータス: ' + statusLabel(m)
           + (m.on_leave ? ' ｜ 休会中' : '')
+          + (m.age !== undefined && m.age !== null ? ' ｜ 年齢: ' + m.age + '歳' : '')
+          + (m.volleyball_position ? ' ｜ ポジション: ' + UI().positionLabel(m.volleyball_position) : '')
+          + (m.volleyball_experience ? ' ｜ バレー歴: ' + m.volleyball_experience : '')
           + (m.line_group_joined_date ? ' ｜ LINEグループ参加: ' + UI().fmtDateJST(m.line_group_joined_date) : '');
         card.appendChild(p);
         var detail = document.createElement('div');
@@ -183,6 +186,20 @@
     if (isOwner) {
       birthI = fieldRow(form, '生年月日', inputOf('date', m.birth_date || '', false));
     }
+    var ageI = fieldRow(form, '年齢', inputOf('number', (m.age !== undefined && m.age !== null) ? String(m.age) : '', false));
+    ageI.min = '0';
+    ageI.max = '120';
+    var expI = fieldRow(form, 'バレー歴', inputOf('text', m.volleyball_experience || '', false, '例: 高校3年・大学サークル2年'));
+    expI.maxLength = 500;
+    var posSel = document.createElement('select');
+    [['', '未回答'], ['setter', 'セッター'], ['outside', 'レフト'], ['middle', 'センター'], ['opposite', 'ライト'], ['libero', 'リベロ'], ['undecided', '未定']].forEach(function (kv) {
+      var o = document.createElement('option');
+      o.value = kv[0];
+      o.textContent = kv[1];
+      if ((m.volleyball_position || '') === kv[0]) { o.selected = true; }
+      posSel.appendChild(o);
+    });
+    fieldRow(form, 'ポジション', posSel);
     var noteI = document.createElement('textarea');
     noteI.value = m.admin_note || '';
     noteI.maxLength = 500;
@@ -206,7 +223,10 @@
           // 非オーナーは生年月日を送らない。SQL 側は COALESCE(p_birth_date, birth_date) で
           // 既存値を維持すること (直書きすると消えてしまうため。未検証の前提。README 参照)。
           birthDate: isOwner ? (birthI && birthI.value ? birthI.value : null) : null,
-          adminNote: noteI.value.trim()
+          adminNote: noteI.value.trim(),
+          age: ageI.value === '' ? null : parseInt(ageI.value, 10),
+          volleyballExperience: expI.value.trim(),
+          position: posSel.value || null
         });
         UI().toast('メンバーを更新しました。');
         detail.innerHTML = '';
@@ -365,7 +385,10 @@
         h.textContent = (r.line_name || '') + ' (' + UI().genderLabel(r.gender) + ')';
         card.appendChild(h);
         var p = document.createElement('p');
-        p.textContent = '本名: ' + (r.real_name || '-') + ' / 申請日: ' + UI().fmtDateTimeJST(r.consent_at);
+        p.textContent = '本名: ' + (r.real_name || '-') + ' / 申請日: ' + UI().fmtDateTimeJST(r.consent_at)
+          + (r.age !== undefined && r.age !== null ? ' / 年齢: ' + r.age + '歳' : '')
+          + (r.volleyball_position ? ' / ポジション: ' + UI().positionLabel(r.volleyball_position) : '')
+          + (r.volleyball_experience ? ' / バレー歴: ' + r.volleyball_experience : '');
         card.appendChild(p);
         var actions = document.createElement('div');
         actions.className = 'practice-actions';

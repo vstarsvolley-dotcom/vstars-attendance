@@ -194,6 +194,18 @@
     }
   }
 
+  function positionLabel(p) {
+    switch (p) {
+      case 'setter': return 'セッター';
+      case 'outside': return 'レフト';
+      case 'middle': return 'センター';
+      case 'opposite': return 'ライト';
+      case 'libero': return 'リベロ';
+      case 'undecided': return '未定';
+      default: return p ? String(p) : '—';
+    }
+  }
+
   // 申込状態を必ずテキストで返す。色だけに依存しない。
   function statusLabel(practice) {
     if (!practice) { return '未申込'; }
@@ -343,6 +355,7 @@
     showError: showError,
     showEmpty: showEmpty,
     genderLabel: genderLabel,
+    positionLabel: positionLabel,
     statusLabel: statusLabel,
     statusClass: statusClass,
     csvDownload: csvDownload,

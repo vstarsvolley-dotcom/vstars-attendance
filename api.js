@@ -170,13 +170,19 @@
     submitRegistrationRequest: function (req) {
       return callRpc('submit_registration_request', {
         p_real_name: req.realName, p_line_name: req.lineName, p_gender: req.gender,
-        p_birth_date: req.birthDate, p_consent: !!req.consent
+        p_birth_date: req.birthDate, p_consent: !!req.consent,
+        p_age: req.age !== undefined ? req.age : null,
+        p_volleyball_experience: req.volleyballExperience || null,
+        p_position: req.position || null
       });
     },
     submitRegistrationRequestByAgent: function (apiKey, req) {
       return callRpc('submit_registration_request_by_agent', {
         p_api_key: apiKey, p_real_name: req.realName, p_line_name: req.lineName,
-        p_gender: req.gender, p_birth_date: req.birthDate, p_consent: !!req.consent
+        p_gender: req.gender, p_birth_date: req.birthDate, p_consent: !!req.consent,
+        p_age: req.age !== undefined ? req.age : null,
+        p_volleyball_experience: req.volleyballExperience || null,
+        p_position: req.position || null
       });
     },
 
@@ -233,13 +239,19 @@
     },
     adminCreateMember: function (m) {
       return callRpc('admin_create_member', {
-        p_real_name: m.realName, p_line_name: m.lineName, p_gender: m.gender, p_birth_date: m.birthDate
+        p_real_name: m.realName, p_line_name: m.lineName, p_gender: m.gender, p_birth_date: m.birthDate,
+        p_age: m.age !== undefined ? m.age : null,
+        p_volleyball_experience: m.volleyballExperience || null,
+        p_position: m.position || null
       });
     },
     adminUpdateMember: function (memberNo, m) {
       return callRpc('admin_update_member', {
         p_member_no: memberNo, p_real_name: m.realName, p_line_name: m.lineName,
-        p_gender: m.gender, p_birth_date: m.birthDate, p_admin_note: m.adminNote || ''
+        p_gender: m.gender, p_birth_date: m.birthDate, p_admin_note: m.adminNote || '',
+        p_age: m.age !== undefined ? m.age : null,
+        p_volleyball_experience: m.volleyballExperience || null,
+        p_position: m.position || null
       });
     },
     adminResetPin: function (memberNo) { return callRpc('admin_reset_pin', { p_member_no: memberNo }); },
