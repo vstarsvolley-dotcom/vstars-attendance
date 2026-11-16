@@ -302,6 +302,13 @@
       var sb = getClient();
       await sb.auth.signOut();
     },
+    // 招待・パスワード再設定リンクから来たセッションで新しいパスワードを設定する。
+    updateAdminPassword: async function (newPassword) {
+      var sb = getClient();
+      var res = await sb.auth.updateUser({ password: newPassword });
+      if (res.error) { throw new Error(rpcErrorMessage(res.error)); }
+      return res.data;
+    },
     getAdminSession: async function () {
       var sb = getClient();
       var res = await sb.auth.getSession();

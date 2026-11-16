@@ -11,6 +11,13 @@
   function renderAdminLogin() {
     var view = viewEl();
     if (!view) { return; }
+    // 招待・パスワード再設定リンクから来た場合 (#access_token&...&type=recovery/invite):
+    // ログイン画面ではなく新しいパスワードの設定画面を出す。
+    var hash = window.location.hash || '';
+    if (hash.indexOf('type=recovery') !== -1 || hash.indexOf('type=invite') !== -1) {
+      renderSetPassword(view);
+      return;
+    }
     view.innerHTML = '';
 
     var title = document.createElement('h1');
@@ -86,6 +93,79 @@
 
     view.appendChild(form);
     emailInput.focus();
+  }
+
+  // 新しいパスワードの設定画面 (招待・再設定リンク用)。
+  function renderSetPassword(view) {
+    view.innerHTML = '';
+    var title = document.createElement('h1');
+    title.className = 'view-title';
+    title.textContent = 'パスワードを設定する';
+    view.appendChild(title);
+    var lead = document.createElement('p');
+    lead.className = 'view-lead';
+    lead.textContent = '管理者アカウントの新しいパスワードを決めてください。8文字以上で入力してください。';
+    view.appendChild(lead);
+    var form = document.createElement('form');
+    form.className = 'form';
+    function field(labelText, id, autoComplete) {
+      var div = document.createElement('div');
+      div.className = 'field';
+      var label = document.createElement('label');
+      label.textContent = labelText;
+      label.setAttribute('for', id);
+      div.appendChild(label);
+      var input = document.createElement('input');
+      input.type = 'password';
+      input.id = id;
+      input.autocomplete = autoComplete;
+      input.required = true;
+      input.minLength = 8;
+      div.appendChild(input);
+      form.appendChild(div);
+      return input;
+    }
+    var pw1 = field('新しいパスワード', 'new-password', 'new-password');
+    var pw2 = field('新しいパスワード（確認）', 'new-password-confirm', 'new-password');
+    var msg = document.createElement('p');
+    msg.className = 'field-error';
+    msg.hidden = true;
+    form.appendChild(msg);
+    var submit = document.createElement('button');
+    submit.type = 'submit';
+    submit.className = 'btn btn-navy btn-large';
+    submit.textContent = 'パスワードを設定する';
+    form.appendChild(submit);
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      msg.hidden = true;
+      if (pw1.value !== pw2.value) {
+        msg.textContent = '2つのパスワードが一致しません。もう一度入力してください。';
+        msg.hidden = false;
+        return;
+      }
+      if (pw1.value.length < 8) {
+        msg.textContent = 'パスワードは8文字以上にしてください。';
+        msg.hidden = false;
+        return;
+      }
+      submit.disabled = true;
+      submit.textContent = '設定中…';
+      try {
+        await Api().updateAdminPassword(pw1.value);
+        UI().toast('パスワードを設定しました。');
+        window.location.hash = '#/admin';
+        window.VstarsAdminApp.renderAdmin('#/admin');
+      } catch (err) {
+        msg.textContent = '設定できませんでした。リンクの有効期限が切れている可能性があります。'
+          + (err && err.message ? '（' + err.message + '）' : '');
+        msg.hidden = false;
+        submit.disabled = false;
+        submit.textContent = 'パスワードを設定する';
+      }
+    });
+    view.appendChild(form);
+    pw1.focus();
   }
 
   window.VstarsAdminAuth = { renderAdminLogin: renderAdminLogin };
