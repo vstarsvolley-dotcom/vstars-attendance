@@ -191,15 +191,31 @@
     ageI.max = '120';
     var expI = fieldRow(form, 'バレー歴', inputOf('text', m.volleyball_experience || '', false, '例: 高校3年・大学サークル2年'));
     expI.maxLength = 500;
-    var posSel = document.createElement('select');
-    [['', '未回答'], ['setter', 'セッター'], ['outside', 'レフト'], ['middle', 'センター'], ['opposite', 'ライト'], ['libero', 'リベロ'], ['undecided', '未定']].forEach(function (kv) {
-      var o = document.createElement('option');
-      o.value = kv[0];
-      o.textContent = kv[1];
-      if ((m.volleyball_position || '') === kv[0]) { o.selected = true; }
-      posSel.appendChild(o);
+    var posBox = document.createElement('div');
+    posBox.className = 'checkbox-group';
+    var posChecks = [];
+    var curPos = Array.isArray(m.volleyball_position) ? m.volleyball_position
+      : (m.volleyball_position ? [m.volleyball_position] : []);
+    [['setter', 'セッター'], ['outside', 'レフト'], ['middle', 'センター'], ['opposite', 'ライト'], ['libero', 'リベロ'], ['undecided', '未定']].forEach(function (kv) {
+      var lab = document.createElement('label');
+      lab.className = 'checkbox-item';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = kv[0];
+      cb.checked = curPos.indexOf(kv[0]) >= 0;
+      cb.addEventListener('change', function () {
+        if (cb.value === 'undecided' && cb.checked) {
+          posChecks.forEach(function (c) { if (c !== cb) { c.checked = false; } });
+        } else if (cb.checked) {
+          posChecks.forEach(function (c) { if (c.value === 'undecided') { c.checked = false; } });
+        }
+      });
+      lab.appendChild(cb);
+      lab.appendChild(document.createTextNode(kv[1]));
+      posBox.appendChild(lab);
+      posChecks.push(cb);
     });
-    fieldRow(form, 'ポジション', posSel);
+    fieldRow(form, 'ポジション', posBox);
     var noteI = document.createElement('textarea');
     noteI.value = m.admin_note || '';
     noteI.maxLength = 500;
@@ -226,7 +242,7 @@
           adminNote: noteI.value.trim(),
           age: ageI.value === '' ? null : parseInt(ageI.value, 10),
           volleyballExperience: expI.value.trim(),
-          position: posSel.value || null
+          position: (function () { var v = posChecks.filter(function (c) { return c.checked; }).map(function (c) { return c.value; }); return v.length ? v : null; })()
         });
         UI().toast('メンバーを更新しました。');
         detail.innerHTML = '';

@@ -63,7 +63,7 @@ var form = document.createElement('form');
 form.className = 'form';
 form.noValidate = true;
 
-var realI = fieldRow(form, '本名 (必須)', inputOf('text', '', true, '例: 星 直樹'));
+var realI = fieldRow(form, '本名 (必須)', inputOf('text', '', true, '例: バレー太郎'));
 realI.maxLength = 100;
 realI.autocomplete = 'name';
 var lineI = fieldRow(form, 'LINE名 (必須)', inputOf('text', '', true, 'LINE で表示される名前'));
@@ -83,14 +83,29 @@ ageI.min = '0';
 ageI.max = '120';
 var expI = fieldRow(form, 'バレー歴 (任意)', inputOf('text', '', false, '例: 高校3年・大学サークル2年'));
 expI.maxLength = 500;
-var posSel = document.createElement('select');
-[['', '選択してください'], ['setter', 'セッター'], ['outside', 'レフト'], ['middle', 'センター'], ['opposite', 'ライト'], ['libero', 'リベロ'], ['undecided', '未定']].forEach(function (kv) {
-var o = document.createElement('option');
-o.value = kv[0];
-o.textContent = kv[1];
-posSel.appendChild(o);
+var posBox = document.createElement('div');
+posBox.className = 'checkbox-group';
+var posChecks = [];
+[['setter', 'セッター'], ['outside', 'レフト'], ['middle', 'センター'], ['opposite', 'ライト'], ['libero', 'リベロ'], ['undecided', '未定']].forEach(function (kv) {
+  var lab = document.createElement('label');
+  lab.className = 'checkbox-item';
+  var cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.value = kv[0];
+  cb.addEventListener('change', function () {
+    // 「未定」は単独のみ。他と併せて選べない。
+    if (cb.value === 'undecided' && cb.checked) {
+      posChecks.forEach(function (c) { if (c !== cb) { c.checked = false; } });
+    } else if (cb.checked) {
+      posChecks.forEach(function (c) { if (c.value === 'undecided') { c.checked = false; } });
+    }
+  });
+  lab.appendChild(cb);
+  lab.appendChild(document.createTextNode(kv[1]));
+  posBox.appendChild(lab);
+  posChecks.push(cb);
 });
-fieldRow(form, 'ポジション (任意)', posSel);
+fieldRow(form, 'ポジション (任意・複数選択可)', posBox);
 
 var apiKeyI = null;
 if (agentMode) {
@@ -149,7 +164,7 @@ return;
 submit.disabled = true;
 submit.textContent = '送信中…';
 try {
-var req = { realName: realName, lineName: lineName, gender: gender, birthDate: birthDate, consent: true, age: ageVal, volleyballExperience: expI.value.trim() || null, position: posSel.value || null };
+var req = { realName: realName, lineName: lineName, gender: gender, birthDate: birthDate, consent: true, age: ageVal, volleyballExperience: expI.value.trim() || null, position: (function () { var v = posChecks.filter(function (c) { return c.checked; }).map(function (c) { return c.value; }); return v.length ? v : null; })() };
 if (agentMode) {
 // API キーはこのページセッション中の変数にのみ保持する
 agentApiKey = apiKeyI.value;

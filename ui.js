@@ -195,6 +195,10 @@
   }
 
   function positionLabel(p) {
+    if (Array.isArray(p)) {
+      if (p.length === 0) { return '—'; }
+      return p.map(positionLabel).join('・');
+    }
     switch (p) {
       case 'setter': return 'セッター';
       case 'outside': return 'レフト';
