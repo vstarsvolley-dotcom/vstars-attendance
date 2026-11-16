@@ -285,7 +285,7 @@
       var html = '<table class="data"><thead><tr><th>LINE名</th><th>No.</th><th>状態</th><th></th></tr></thead><tbody>';
       rows.forEach(function (r) {
         var st = r.status || '';
-        var label = st === 'confirmed' ? '確定' : st === 'waitlisted' ? '待ち' : st === 'walkin' ? 'ウォークイン' : (st || '—');
+        var label = st === 'confirmed' ? '確定' : st === 'waitlisted' ? ('待ち' + (r.waitlist_position ? r.waitlist_position + '番目' : '')) : st === 'walkin' ? 'ウォークイン' : (st || '—');
         html += '<tr><td>' + UI().esc(r.line_name || '-') + '</td><td>' + UI().esc(r.member_no !== undefined ? r.member_no : '-') + '</td><td>' + UI().esc(label) + '</td>';
         html += '<td>' + (r.registration_id ? '<button type="button" class="btn btn-cancel btn-small" data-reg="' + UI().esc(r.registration_id) + '">代理キャンセル</button>' : '') + '</td></tr>';
       });

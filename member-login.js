@@ -127,6 +127,10 @@
     var form = document.createElement('form');
     form.className = 'form';
     form.setAttribute('autocomplete', 'off');
+    // ブラウザ標準の pattern/required チェックだと headless 等で
+    // エラー表示が出ないまま送信が止まるため、JS 側のチェック
+    // (「PIN は4桁の数字で入力してください。」) を必ず通す。
+    form.noValidate = true;
 
     function pinField(labelText, name, autoComplete) {
       var div = document.createElement('div');

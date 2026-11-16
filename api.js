@@ -138,6 +138,18 @@
       return callRpc('verify_pin', {
         p_member_no: memberNo, p_pin: pin,
         p_device_token: api.ensureDeviceToken(), p_device_label: deviceLabel()
+      }).then(function (res) {
+        // 失敗は例外ではなく ok:false で返る (SQL 側のコメント参照)。
+        // ロック到達時は device_locked 扱いにして、ログイン画面の
+        // ロック文言 (isLockedError) が出るようにする。
+        if (res && res.ok === false) {
+          var e = new Error(res.locked_until ? 'device_locked' : (res.error || 'invalid_pin'));
+          e.code = res.locked_until ? 'device_locked' : (res.error || 'invalid_pin');
+          e.failedAttempts = res.failed_attempts;
+          e.lockedUntil = res.locked_until;
+          throw e;
+        }
+        return res;
       });
     },
     listPractices: function () { return callRpc('list_practices', { p_token: getToken() }); },
