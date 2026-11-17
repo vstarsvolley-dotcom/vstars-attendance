@@ -241,6 +241,7 @@
           return;
         }
       }
+      alert('FORM men=' + capMen + ' women=' + capWomen + ' cap=' + cap);
       submit.disabled = true;
       try {
         if (isEdit) {
