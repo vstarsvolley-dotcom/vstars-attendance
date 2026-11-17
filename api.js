@@ -353,6 +353,7 @@
       });
     },
     adminMemberStats: function () { return callRpc('admin_member_stats', {}); },
+    adminMemberStatsRange: function (from, to) { return callRpc('admin_member_stats_range', { p_from: from || null, p_to: to || null }); },
     // 明日のリマインドを手動送信。{ok, practices, reminded} を返す。
     adminSendReminders: function () { return callRpc('admin_send_reminders', {}); },
     adminListMembers: function (query) {

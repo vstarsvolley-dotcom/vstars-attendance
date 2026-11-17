@@ -723,7 +723,7 @@
     err.hidden = true;
     form.appendChild(err);
     function validate(text) {
-      var Pure = window.V18Pure;
+      var Pure = window.V19Pure;
       if (Pure && Pure.validateAnnouncementMessage) { return Pure.validateAnnouncementMessage(text); }
       var t = (text === null || text === undefined) ? '' : String(text).trim();
       if (t.length === 0) { return { ok: false, error: 'empty_message' }; }
@@ -928,7 +928,7 @@
         }
         sizes = parts.map(function (s) { return parseInt(s.trim(), 10); });
       }
-      var Pure = window.V18Pure;
+      var Pure = window.V19Pure;
       if (!Pure || !Pure.splitTeams) {
         err.textContent = 'チーム分けの読み込みに失敗しました。ページを読み込み直してください。';
         err.hidden = false;

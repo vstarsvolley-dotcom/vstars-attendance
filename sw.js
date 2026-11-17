@@ -5,7 +5,7 @@
  */
 'use strict';
 
-var CACHE_NAME = 'vstars-v18';
+var CACHE_NAME = 'vstars-v19';
 var CORE_ASSETS = [
   './',
   './index.html',
@@ -15,7 +15,7 @@ var CORE_ASSETS = [
   './vendor/supabase.min.js',
   './api.js',
   './ui.js',
-  './v18-pure.js',
+  './v19-pure.js',
   './member-app.js',
   './member-login.js',
   './member-practices.js',

@@ -1,5 +1,7 @@
-/* Vstars 出欠 — 管理: 出席率 (SQL 22)
- * admin_member_stats を呼び、出席率順に表示する。
+/* Vstars 出欠 — 管理: 出席率 (SQL 22・SQL 24)
+ * admin_member_stats (通算) または admin_member_stats_range (期間指定) を
+ * 呼び、出席率順に表示する。期間は 通算 / 直近3ヶ月 / 今月 から選べる
+ * (直近3ヶ月・今月の範囲は v19-pure.js の statsPeriodRange で求める)。
  * 会員名 (LINE 名・本名) での検索ができる。
  * 出席率が NULL (未入力のみ) の会員は「—」と表示する。
  * レベルは管理者画面のみの表示 (会員側には出さない)。
@@ -31,8 +33,40 @@
     var view = App().adminHeader(viewEl(), 'attendance', '出席率');
     var lead = document.createElement('p');
     lead.className = 'muted';
-    lead.textContent = '出席率の高い順に並んでいます。出席率は「出席 ÷ (出席＋欠席)」で、未入力は数えません。';
     view.appendChild(lead);
+
+    // 集計期間 (既定は通算)。切り替えたら再取得する。
+    var period = 'all';
+    var periodBtns = {};
+    var periodRow = document.createElement('div');
+    periodRow.className = 'toolbar';
+    [['all', '通算'], ['last3months', '直近3ヶ月'], ['thismonth', '今月']].forEach(function (def) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = def[1];
+      b.addEventListener('click', function () {
+        if (period === def[0]) { return; }
+        period = def[0];
+        updatePeriodBtns();
+        refresh();
+      });
+      periodBtns[def[0]] = b;
+      periodRow.appendChild(b);
+    });
+    view.appendChild(periodRow);
+
+    function updatePeriodBtns() {
+      Object.keys(periodBtns).forEach(function (key) {
+        periodBtns[key].className = 'btn btn-small ' + (period === key ? 'btn-navy' : 'btn-ghost');
+      });
+    }
+    updatePeriodBtns();
+
+    function periodName(p) {
+      if (p === 'last3months') { return '直近3ヶ月'; }
+      if (p === 'thismonth') { return '今月'; }
+      return '通算';
+    }
 
     var searchForm = document.createElement('form');
     searchForm.className = 'form';
@@ -91,8 +125,16 @@
 
     async function refresh() {
       listEl.innerHTML = '<p>読み込み中…</p>';
+      var range = period === 'all'
+        ? { from: null, to: null }
+        : window.V19Pure.statsPeriodRange(period, UI().jstTodayStr());
+      lead.textContent = '期間：'
+        + (period === 'all' ? '通算。' : range.from + '〜' + range.to + '（' + periodName(period) + '）。')
+        + '出席率の高い順に並んでいます。出席率は「出席 ÷ (出席＋欠席)」で、未入力は数えません。';
       try {
-        var rows = await Api().adminMemberStats();
+        var rows = period === 'all'
+          ? await Api().adminMemberStats()
+          : await Api().adminMemberStatsRange(range.from, range.to);
         lastStats = Array.isArray(rows) ? rows : [];
       } catch (e) {
         UI().showError(listEl, '出席率を取得できませんでした。' + (e && e.message ? ' ' + e.message : ''), refresh);
