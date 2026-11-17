@@ -84,7 +84,12 @@
     view.appendChild(tabRow);
 
     if (practicesCache.length === 0) {
-      UI().showEmpty(view, tab === 'past' ? '参加した過去の練習がありません。' : '申し込める練習がありません。');
+      // 空のメッセージは一覧の枠の中だけに出す。view 全体に showEmpty すると
+      // タイトル・切替タブごと消えて「今後の練習」に戻れなくなるため (2026-11-17 修正)。
+      var emptyWrap = document.createElement('div');
+      emptyWrap.className = 'practice-list';
+      UI().showEmpty(emptyWrap, tab === 'past' ? '参加した過去の練習がありません。' : '申し込める練習がありません。');
+      view.appendChild(emptyWrap);
       return;
     }
 
