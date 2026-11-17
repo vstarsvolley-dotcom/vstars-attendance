@@ -241,7 +241,12 @@
           return;
         }
       }
-      alert('FORM men=' + capMen + ' women=' + capWomen + ' cap=' + cap);
+      var _dbg = document.createElement('div');
+      var _dbg.id = 'vstars-debug-values';
+    _dbg.textContent = 'DEBUG-FORM men=' + capMen + ' women=' + capWomen + ' cap=' + cap;
+    _dbg.style.cssText = 'position:fixed;top:0;left:0;background:#ff0;color:#000;font-size:24px;z-index:9999;padding:8px;';
+    document.body.appendChild(_dbg);
+    document.title = 'DEBUG men=' + capMen + ' women=' + capWomen;
       submit.disabled = true;
       try {
         if (isEdit) {
