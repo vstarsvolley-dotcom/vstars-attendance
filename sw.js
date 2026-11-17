@@ -5,7 +5,7 @@
  */
 'use strict';
 
-var CACHE_NAME = 'vstars-v16-debug2';
+var CACHE_NAME = 'vstars-v18';
 var CORE_ASSETS = [
   './',
   './index.html',
@@ -15,6 +15,7 @@ var CORE_ASSETS = [
   './vendor/supabase.min.js',
   './api.js',
   './ui.js',
+  './v18-pure.js',
   './member-app.js',
   './member-login.js',
   './member-practices.js',
@@ -25,6 +26,7 @@ var CORE_ASSETS = [
   './admin-dashboard.js',
   './admin-practices.js',
   './admin-members.js',
+  './admin-attendance.js',
   './admin-reports.js',
   './registration-form.js',
   './icon-192.png',

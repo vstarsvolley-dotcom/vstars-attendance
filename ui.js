@@ -7,6 +7,8 @@
   var WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
   var toastTimer = null;
 
+  function Api() { return window.VstarsApi; }
+
   function parseDate(value) {
     if (!value) { return null; }
     if (value instanceof Date) { return value; }
@@ -409,12 +411,76 @@
     return s;
   }
 
+  // チーム名: チーム 1=Aチーム、2=Bチーム、3=Cチーム (SQL 22)。
+  function teamLabel(teamNo) {
+    var labels = ['Aチーム', 'Bチーム', 'Cチーム'];
+    var n = parseInt(teamNo, 10);
+    if (n >= 1 && n <= labels.length) { return labels[n - 1]; }
+    return (teamNo === null || teamNo === undefined ? '' : String(teamNo)) + 'チーム';
+  }
+
+  // v18: 申込済みの練習カード内に「運営からのお知らせ」と「あなたのチーム」を
+  // 読み込んで表示する。申込んでいない練習のカードには出さない。
+  // お知らせは最大 5 件・新しい順。どちらも無ければ枠自体を消す。
+  function loadMemberPracticeExtras(container, practice) {
+    var api = Api();
+    if (!api || !api.listMyAnnouncements || !api.getMyTeam) { return; }
+    var id = practice.practice_id || practice.id;
+    if (!id) { return; }
+    var annP = api.listMyAnnouncements(id).catch(function () { return null; });
+    var teamP = api.getMyTeam(id).catch(function () { return null; });
+    Promise.all([annP, teamP]).then(function (results) {
+      if (!container.isConnected) { return; }
+      var anns = Array.isArray(results[0]) ? results[0].slice(0, 5) : [];
+      var teams = Array.isArray(results[1]) ? results[1] : [];
+      if (anns.length === 0 && teams.length === 0) { container.remove(); return; }
+      container.innerHTML = '';
+      if (teams.length > 0) {
+        var t = teams[0];
+        var label = t.team_label || teamLabel(t.team_no);
+        var teamLine = document.createElement('p');
+        teamLine.className = 'my-team';
+        teamLine.textContent = 'あなたは ' + label + 'です。';
+        container.appendChild(teamLine);
+        if (t.stale) {
+          var warn = document.createElement('p');
+          warn.className = 'danger-text';
+          warn.textContent = '申込が変わっています。再分けしてください。';
+          container.appendChild(warn);
+        }
+      }
+      if (anns.length > 0) {
+        var h = document.createElement('h3');
+        h.textContent = '運営からのお知らせ';
+        container.appendChild(h);
+        var ul = document.createElement('ul');
+        ul.className = 'announcement-list';
+        anns.forEach(function (a) {
+          var li = document.createElement('li');
+          var msg = document.createElement('p');
+          msg.textContent = a.message || '';
+          li.appendChild(msg);
+          if (a.created_at) {
+            var when = document.createElement('p');
+            when.className = 'muted';
+            when.textContent = fmtDateTimeJST(a.created_at);
+            li.appendChild(when);
+          }
+          ul.appendChild(li);
+        });
+        container.appendChild(ul);
+      }
+    });
+  }
+
   // 練習カードの DOM を作る。handlers: {onApply, onCancel, onRoster, onToggleSelect, selected}
   function renderPracticeCard(practice, handlers) {
     handlers = handlers || {};
     var id = practice.practice_id || practice.id;
     var date = practice.practice_date || practice.date;
     var cancelled = practice.is_cancelled || practice.cancelled || practice.status === 'cancelled';
+    // 過去の練習 (SQL 21): 日付が今日より前。過去分は申込・キャンセルを出さない。
+    var isPast = String(date || '').slice(0, 10) < jstTodayStr();
     var myStatus = statusLabel(practice);
     var myRegId = practice.my_registration_id || practice.registration_id || null;
 
@@ -456,6 +522,16 @@
     counts.textContent = genderCountsText(practice);
     card.appendChild(counts);
 
+    // v18: 申込済みの練習には「運営からのお知らせ」と「あなたのチーム」を
+    // カード内に出す。申込んでいない・キャンセル済みの練習には出さない。
+    var isApplied = myStatus.indexOf('確定') !== -1 || myStatus.indexOf('待ち') !== -1;
+    if (isApplied) {
+      var extrasEl = document.createElement('div');
+      extrasEl.className = 'member-extras';
+      card.appendChild(extrasEl);
+      loadMemberPracticeExtras(extrasEl, practice);
+    }
+
     if (cancelled) {
       var cx = document.createElement('p');
       cx.className = 'practice-cancelled-note';
@@ -466,7 +542,19 @@
     var actions = document.createElement('div');
     actions.className = 'practice-actions';
 
-    if (!cancelled) {
+    // 動画リンク (SQL 21): 管理者が貼った YouTube プレイリスト等。別タブで開く。
+    // 過去・今後・中止を問わず、リンクがある練習には出す。
+    if (practice.video_url) {
+      var videoLink = document.createElement('a');
+      videoLink.className = 'btn btn-ghost btn-small';
+      videoLink.href = practice.video_url;
+      videoLink.target = '_blank';
+      videoLink.rel = 'noopener';
+      videoLink.textContent = '動画を見る';
+      actions.appendChild(videoLink);
+    }
+
+    if (!cancelled && !isPast) {
       if (myStatus === '未申込') {
         // まとめ申し込みのチェックボックスは、一覧画面でのみ出す。
         // カレンダーの当日一覧では onToggleSelect を渡さないため出ない。
@@ -539,6 +627,18 @@
     invalid_kind: '種別が正しくありません。',
     invalid_month: '月が正しくありません。',
     invalid_visibility: '公開/非公開の指定が正しくありません。',
+    invalid_video_url: '動画リンクは http:// または https:// で始まる URL を入力してください。',
+    // v18 (SQL 22)
+    empty_message: 'メッセージを入力してください。',
+    message_too_long: 'メッセージは500字以内で入力してください。',
+    invalid_skill_level: 'レベルが正しくありません。',
+    invalid_team_member: 'チーム分けに確定者でないメンバーが含まれています。',
+    team_too_large: '1チームは7人までです。',
+    invalid_team_count: 'チーム数は2または3で指定してください。',
+    too_few_members: '確定者が2人未満のため、チーム分けできません。',
+    not_past_practice: '開催済みの練習にのみ入力できます。',
+    not_confirmed: '確定者のみに記録できます。',
+    announcement_not_found: 'お知らせが見つかりませんでした。',
     not_private: 'この練習試合・大会は公開のため、招待は必要ありません。',
     already_responded: 'この招待にはすでに回答済みです。',
     invalid_response: '回答の種類が正しくありません。',
@@ -581,6 +681,7 @@
     showEmpty: showEmpty,
     genderLabel: genderLabel,
     positionLabel: positionLabel,
+    teamLabel: teamLabel,
     statusLabel: statusLabel,
     statusClass: statusClass,
     friendlyError: friendlyError,

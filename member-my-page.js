@@ -104,6 +104,21 @@
       + '<p class="stat-value">' + UI().esc(rateText) + '</p>'
       + '<p class="stat-sub">出席回数 ÷ 開催回数（中止を除く）</p>';
     statGrid.appendChild(c2);
+    // v18: これまでの出席率 (get_my_page の my_attendance_rate)。
+    // 未入力のみ (NULL) の場合は「まだ記録がありません」と表示する。
+    var overallRate = page.my_attendance_rate !== undefined ? page.my_attendance_rate : null;
+    var attended = page.my_attended_count !== undefined ? page.my_attended_count : null;
+    var absent = page.my_absent_count !== undefined ? page.my_absent_count : null;
+    var c3 = document.createElement('div');
+    c3.className = 'stat-card';
+    var overallText = overallRate === null || overallRate === undefined ? '—'
+      : (typeof overallRate === 'number' && overallRate <= 1 ? Math.round(overallRate * 100) + '%' : String(overallRate) + '%');
+    var overallSub = overallRate === null || overallRate === undefined ? 'まだ記録がありません'
+      : '出席 ' + (attended !== null && attended !== undefined ? attended : 0) + '回・欠席 ' + (absent !== null && absent !== undefined ? absent : 0) + '回';
+    c3.innerHTML = '<p class="stat-label">これまでの出席率</p>'
+      + '<p class="stat-value">' + UI().esc(overallText) + '</p>'
+      + '<p class="stat-sub">' + UI().esc(overallSub) + '</p>';
+    statGrid.appendChild(c3);
     view.appendChild(statGrid);
 
     // 自分の申し込み一覧
@@ -139,6 +154,17 @@
         badge.textContent = UI().statusLabel(r);
         row.appendChild(badge);
         item.appendChild(row);
+        // 動画リンク (SQL 21): リンクがある申し込みには「動画を見る」を出す (別タブ)。
+        if (r.video_url) {
+          var vlink = document.createElement('a');
+          vlink.className = 'btn btn-ghost btn-small';
+          vlink.href = r.video_url;
+          vlink.target = '_blank';
+          vlink.rel = 'noopener';
+          vlink.textContent = '動画を見る';
+          vlink.style.marginTop = '8px';
+          item.appendChild(vlink);
+        }
         var regId = r.registration_id || r.id;
         var active = status !== 'cancelled' && status !== 'キャンセル済み' && status !== 'canceled';
         if (regId && active) {

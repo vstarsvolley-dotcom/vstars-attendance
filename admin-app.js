@@ -20,6 +20,7 @@
       ['#/admin/members', 'members', 'メンバー管理'],
       ['#/admin/requests', 'requests', '登録申請'],
       ['#/admin/withdrawals', 'withdrawals', '退会候補'],
+      ['#/admin/attendance', 'attendance', '出席率'],
       ['#/admin/reports', 'reports', '集計・出力']
     ].forEach(function (t) {
       var a = document.createElement('a');
@@ -92,6 +93,13 @@
         break;
       case 'withdrawals':
         window.VstarsAdminMembers.renderWithdrawals();
+        break;
+      case 'attendance':
+        if (window.VstarsAdminAttendance && window.VstarsAdminAttendance.renderAdminAttendance) {
+          window.VstarsAdminAttendance.renderAdminAttendance();
+        } else {
+          window.location.hash = '#/admin';
+        }
         break;
       case 'reports':
         window.VstarsAdminReports.renderAdminReports();

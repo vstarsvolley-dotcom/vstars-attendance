@@ -41,6 +41,38 @@
 
   function renderAdminPractices() {
     var view = App().adminHeader(viewEl(), 'practices', '練習管理');
+
+    // v18: 明日のリマインドを手動で送る (pg_cron のフォールバック)。
+    // 送信済みの練習はスキップされるため、送ったあとは 0 件になる。
+    var remindSec = document.createElement('div');
+    remindSec.className = 'practice-card';
+    var remindBtn = document.createElement('button');
+    remindBtn.type = 'button';
+    remindBtn.className = 'btn btn-navy';
+    remindBtn.textContent = '明日のリマインドを送る';
+    remindSec.appendChild(remindBtn);
+    var remindResult = document.createElement('p');
+    remindResult.className = 'muted';
+    remindResult.textContent = 'まだ送っていません。毎日 18:00 に自動で送られます。';
+    remindSec.appendChild(remindResult);
+    remindBtn.addEventListener('click', async function () {
+      remindBtn.disabled = true;
+      remindResult.textContent = '送信中…';
+      try {
+        var res = await Api().adminSendReminders();
+        var practices = res && res.practices !== undefined ? res.practices : 0;
+        var reminded = res && res.reminded !== undefined ? res.reminded : 0;
+        remindResult.textContent = practices + '件の練習、' + reminded + '人にリマインドを送りました。'
+          + (practices === 0 ? '（すでに送信済みの場合は 0 件になります。明日の練習がない場合も 0 件です。）' : '');
+        UI().toast(practices + '件の練習、' + reminded + '人にリマインドを送りました。');
+      } catch (e) {
+        remindResult.textContent = '送信できませんでした。' + UI().friendlyError(e);
+        UI().toast('リマインドを送れませんでした。' + UI().friendlyError(e));
+      }
+      remindBtn.disabled = false;
+    });
+    view.appendChild(remindSec);
+
     var toolbar = document.createElement('div');
     toolbar.className = 'toolbar';
     var createBtn = document.createElement('button');
@@ -195,6 +227,11 @@
     kindSel.addEventListener('change', toggleGenderCaps);
     toggleGenderCaps();
 
+    // 動画リンク (SQL 21): YouTube プレイリスト等の URL。任意。練習・試合・大会すべてで使える。
+    var videoI = fieldRow(form, '動画リンク（YouTube プレイリスト）', inputOf('url', practice ? (practice.video_url || '') : ''));
+    videoI.placeholder = 'https://www.youtube.com/playlist?list=…';
+    videoI.maxLength = 500;
+
     var err = document.createElement('p');
     err.className = 'field-error';
     err.hidden = true;
@@ -222,6 +259,14 @@
       }
       var kind = kindSel.value;
       var isGendered = kind === 'match' || kind === 'tournament';
+      // 動画リンク (SQL 21): 空欄はなし。http(s) 以外はサーバーでも弾くが、
+      // ここでも先に日本語で伝える。
+      var videoUrl = (videoI.value || '').trim();
+      if (videoUrl !== '' && videoUrl.indexOf('http://') !== 0 && videoUrl.indexOf('https://') !== 0) {
+        err.textContent = '動画リンクは http:// または https:// で始まる URL を入力してください。';
+        err.hidden = false;
+        return;
+      }
       var cap = null;
       var capMen = null;
       var capWomen = null;
@@ -241,12 +286,6 @@
           return;
         }
       }
-      var _dbg = document.createElement('div');
-      _dbg.id = 'vstars-debug-values';
-    _dbg.textContent = 'DEBUG-FORM men=' + capMen + ' women=' + capWomen + ' cap=' + cap;
-    _dbg.style.cssText = 'position:fixed;top:0;left:0;background:#ff0;color:#000;font-size:24px;z-index:9999;padding:8px;';
-    document.body.appendChild(_dbg);
-    document.title = 'DEBUG men=' + capMen + ' women=' + capWomen;
       submit.disabled = true;
       try {
         if (isEdit) {
@@ -254,7 +293,9 @@
             date: dateI.value, startTime: startI.value, endTime: endI.value,
             venue: venueI.value.trim(), capacity: cap,
             kind: kind, capacityMen: capMen, capacityWomen: capWomen,
-            visibility: isGendered ? visSel.value : 'public'
+            visibility: isGendered ? visSel.value : 'public',
+            // 空文字をそのまま渡す (SQL 21: 空文字はリンクのクリア。null は既存値維持)。
+            videoUrl: videoUrl
           });
           UI().toast('練習を更新しました。');
         } else {
@@ -262,7 +303,8 @@
             date: dateI.value, startTime: startI.value, endTime: endI.value,
             venue: venueI.value.trim(), capacity: cap, ruleId: null,
             kind: kind, capacityMen: capMen, capacityWomen: capWomen,
-            visibility: isGendered ? visSel.value : 'public'
+            visibility: isGendered ? visSel.value : 'public',
+            videoUrl: videoUrl || null
           });
           UI().toast('練習を作成しました。');
         }
@@ -507,6 +549,23 @@
       return btn;
     }
     addBtn('名簿', 'btn-ghost', function () { showRoster(p, detail, wrap); });
+    // v18: 参加者への一斉連絡 (確定者＋待ちの人にプッシュ通知＋アプリ内表示)。
+    addBtn('参加者へ連絡', 'btn-ghost', function () { showAnnouncementForm(p, detail, wrap); });
+    // v18: チーム分け (確定者が 2 人以上のときに表示)。
+    var confirmedCount = p.confirmed_count !== undefined ? p.confirmed_count : null;
+    if (confirmedCount === null || confirmedCount >= 2) {
+      addBtn('チーム分け', 'btn-ghost', function () { showTeamSplit(p, detail, wrap); });
+    }
+    // 動画リンク (SQL 21): リンクがある練習には「動画を見る」を出す (別タブ)。
+    if (p.video_url) {
+      var vl = document.createElement('a');
+      vl.className = 'btn btn-ghost btn-small';
+      vl.href = p.video_url;
+      vl.target = '_blank';
+      vl.rel = 'noopener';
+      vl.textContent = '動画を見る';
+      actions.appendChild(vl);
+    }
     addBtn('編集', 'btn-ghost', function () { showPracticeForm(viewEl(), p); });
     // 招待管理は非公開の試合・大会のときだけ出す (SQL 19)。
     if (UI().isMatchOrTournament(p) && UI().isPrivate(p)) {
@@ -574,16 +633,45 @@
       }
       var table = document.createElement('div');
       table.className = 'table-wrap';
-      var html = '<table class="data"><thead><tr><th>LINE名</th><th>No.</th><th>状態</th><th></th></tr></thead><tbody>';
+      // v18: 開催済みの練習では、確定者ごとに出席／未入力／欠席を付けられる。
+      // 当日・未来の練習には出欠欄を出さない。
+      var isPast = String(p.practice_date || '').slice(0, 10) < UI().jstTodayStr();
+      var html = '<table class="data"><thead><tr><th>LINE名</th><th>No.</th><th>状態</th>' + (isPast ? '<th>出欠</th>' : '') + '<th></th></tr></thead><tbody>';
       rows.forEach(function (r) {
         var st = r.status || '';
         var label = st === 'confirmed' ? '確定' : st === 'waitlisted' ? ('待ち' + (r.waitlist_position ? r.waitlist_position + '番目' : '')) : st === 'walkin' ? 'ウォークイン' : (st || '—');
         html += '<tr><td>' + UI().esc(r.line_name || '-') + '</td><td>' + UI().esc(r.member_no !== undefined ? r.member_no : '-') + '</td><td>' + UI().esc(label) + '</td>';
+        if (isPast) {
+          if (st === 'confirmed' && r.member_no !== undefined) {
+            var cur = r.attendance_status || '';
+            html += '<td><select data-att-member="' + UI().esc(r.member_no) + '" data-att-prev="' + UI().esc(cur) + '">'
+              + '<option value=""' + (cur === '' ? ' selected' : '') + '>未入力</option>'
+              + '<option value="attended"' + (cur === 'attended' ? ' selected' : '') + '>出席</option>'
+              + '<option value="absent"' + (cur === 'absent' ? ' selected' : '') + '>欠席</option></select></td>';
+          } else {
+            html += '<td>—</td>';
+          }
+        }
         html += '<td>' + (r.registration_id ? '<button type="button" class="btn btn-cancel btn-small" data-reg="' + UI().esc(r.registration_id) + '">代理キャンセル</button>' : '') + '</td></tr>';
       });
       html += '</tbody></table>';
       table.innerHTML = html;
       detail.appendChild(table);
+      table.querySelectorAll('[data-att-member]').forEach(function (sel) {
+        sel.addEventListener('change', async function () {
+          var memberNo = parseInt(sel.getAttribute('data-att-member'), 10);
+          var prev = sel.getAttribute('data-att-prev') || '';
+          var value = sel.value;
+          try {
+            await Api().adminSetAttendance(pid(p), memberNo, value || null);
+            sel.setAttribute('data-att-prev', value);
+            UI().toast(value === 'attended' ? '出席にしました。' : value === 'absent' ? '欠席にしました。' : '未入力に戻しました。');
+          } catch (e) {
+            UI().toast('出欠を記録できませんでした。' + UI().friendlyError(e));
+            sel.value = prev;
+          }
+        });
+      });
       table.querySelectorAll('[data-reg]').forEach(function (btn) {
         btn.addEventListener('click', async function () {
           var ok = await UI().confirmSheet({
@@ -604,6 +692,371 @@
     } catch (e) {
       detail.innerHTML = '<p class="danger-text">名簿を取得できませんでした。' + UI().esc(e && e.message ? e.message : '') + '</p>';
     }
+  }
+
+  // v18: 参加者への一斉連絡 (SQL 22)。
+  // メッセージ入力 (最大 500 字、カウンタ付き) → 確定者＋待ちの人へ送信。
+  // 送信履歴の一覧と削除もここで行う。
+  function showAnnouncementForm(p, detail, wrap) {
+    detail.innerHTML = '';
+    var title = document.createElement('h3');
+    title.textContent = '参加者へ連絡';
+    detail.appendChild(title);
+    var note = document.createElement('p');
+    note.className = 'muted';
+    note.textContent = 'この練習の確定者と待ちの人全員に、プッシュ通知とアプリ内のお知らせで届きます。';
+    detail.appendChild(note);
+
+    var form = document.createElement('form');
+    form.className = 'form';
+    var area = document.createElement('textarea');
+    area.rows = 4;
+    area.maxLength = 500;
+    area.placeholder = '例: 明日は会場が梅島小学校に変わります。';
+    fieldRow(form, 'メッセージ（500字まで）', area);
+    var counter = document.createElement('p');
+    counter.className = 'muted';
+    counter.textContent = '0/500字';
+    form.appendChild(counter);
+    var err = document.createElement('p');
+    err.className = 'field-error';
+    err.hidden = true;
+    form.appendChild(err);
+    function validate(text) {
+      var Pure = window.V18Pure;
+      if (Pure && Pure.validateAnnouncementMessage) { return Pure.validateAnnouncementMessage(text); }
+      var t = (text === null || text === undefined) ? '' : String(text).trim();
+      if (t.length === 0) { return { ok: false, error: 'empty_message' }; }
+      if (t.length > 500) { return { ok: false, error: 'message_too_long' }; }
+      return { ok: true, length: t.length };
+    }
+    area.addEventListener('input', function () {
+      var v = validate(area.value);
+      counter.textContent = (v.ok ? v.length : area.value.trim().length) + '/500字';
+      err.hidden = true;
+    });
+    var submit = document.createElement('button');
+    submit.type = 'submit';
+    submit.className = 'btn btn-navy';
+    submit.textContent = '送信する';
+    form.appendChild(submit);
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      err.hidden = true;
+      var v = validate(area.value);
+      if (!v.ok) {
+        err.textContent = UI().friendlyError({ code: v.error, message: v.error });
+        err.hidden = false;
+        return;
+      }
+      submit.disabled = true;
+      try {
+        await Api().adminSendAnnouncement(pid(p), area.value.trim());
+        UI().toast('お知らせを送りました。');
+        area.value = '';
+        counter.textContent = '0/500字';
+        refreshHistory();
+      } catch (ex) {
+        err.textContent = '送信できませんでした。' + UI().friendlyError(ex);
+        err.hidden = false;
+      }
+      submit.disabled = false;
+    });
+    detail.appendChild(form);
+
+    var histTitle = document.createElement('h3');
+    histTitle.textContent = '送信履歴';
+    detail.appendChild(histTitle);
+    var histEl = document.createElement('div');
+    detail.appendChild(histEl);
+    async function refreshHistory() {
+      histEl.innerHTML = '<p>読み込み中…</p>';
+      var rows;
+      try {
+        rows = await Api().adminListAnnouncements(pid(p));
+      } catch (e) {
+        histEl.innerHTML = '<p class="danger-text">送信履歴を取得できませんでした。' + UI().esc(e && e.message ? e.message : '') + '</p>';
+        return;
+      }
+      rows = Array.isArray(rows) ? rows : [];
+      histEl.innerHTML = '';
+      if (rows.length === 0) {
+        var empty = document.createElement('p');
+        empty.className = 'muted';
+        empty.textContent = '送信したお知らせはまだありません。';
+        histEl.appendChild(empty);
+        return;
+      }
+      rows.forEach(function (a) {
+        var item = document.createElement('div');
+        item.className = 'my-reg-item';
+        var msg = document.createElement('p');
+        msg.style.margin = '0 0 8px';
+        msg.textContent = a.message || '';
+        item.appendChild(msg);
+        var meta = document.createElement('p');
+        meta.className = 'muted';
+        meta.style.margin = '0 0 8px';
+        meta.textContent = (a.created_at ? UI().fmtDateTimeJST(a.created_at) : '')
+          + (a.created_by_line_name ? '　送信者: ' + a.created_by_line_name : '');
+        item.appendChild(meta);
+        var delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'btn btn-cancel btn-small';
+        delBtn.textContent = '削除';
+        delBtn.addEventListener('click', async function () {
+          var ok = await UI().confirmSheet({
+            title: 'お知らせを削除しますか？',
+            body: 'このお知らせは会員の画面からも消えます。プッシュ通知で届いた分は取り消せません。',
+            okLabel: '削除する', danger: true
+          });
+          if (!ok) { return; }
+          try {
+            await Api().adminDeleteAnnouncement(a.announcement_id);
+            UI().toast('お知らせを削除しました。');
+            refreshHistory();
+          } catch (ex) { UI().toast('削除できませんでした。' + UI().friendlyError(ex)); }
+        });
+        item.appendChild(delBtn);
+        histEl.appendChild(item);
+      });
+    }
+    refreshHistory();
+  }
+
+  // v18: チーム分けツール (SQL 22)。
+  // 確定者をレベル・セッターで自動分けし、タップで 2 人交換して保存する。
+  // レベルは管理者画面にのみ表示する。
+  function showTeamSplit(p, detail, wrap) {
+    detail.innerHTML = '<p>読み込み中…</p>';
+    // 確定者とレベル・ポジションを集める。admin_get_practice_roster には
+    // レベルが含まれないため、admin_list_members から補う。
+    Promise.all([
+      Api().adminGetPracticeRoster(pid(p)),
+      Api().adminListMembers('').catch(function () { return []; }),
+      Api().adminListTeams(pid(p)).catch(function () { return []; })
+    ]).then(function (results) {
+      var roster = Array.isArray(results[0]) ? results[0] : [];
+      var members = Array.isArray(results[1]) ? results[1] : [];
+      var saved = Array.isArray(results[2]) ? results[2] : [];
+      var byNo = {};
+      members.forEach(function (m) { byNo[m.member_no] = m; });
+      var confirmed = roster.filter(function (r) { return r.status === 'confirmed'; });
+      if (confirmed.length < 2) {
+        detail.innerHTML = '<p>確定者が2人未満のため、チーム分けできません。</p>';
+        return;
+      }
+      var splitMembers = confirmed.map(function (r) {
+        var m = byNo[r.member_no] || {};
+        return {
+          memberNo: r.member_no,
+          lineName: r.line_name || m.line_name || '',
+          gender: m.gender || '',
+          skillLevel: (m.skill_level !== undefined ? m.skill_level : null),
+          position: m.volleyball_position || null
+        };
+      });
+      drawTeamSplit(detail, p, splitMembers, saved);
+    }).catch(function (e) {
+      detail.innerHTML = '<p class="danger-text">名簿を取得できませんでした。' + UI().esc(e && e.message ? e.message : '') + '</p>';
+    });
+  }
+
+  function drawTeamSplit(detail, p, splitMembers, saved) {
+    detail.innerHTML = '';
+    var title = document.createElement('h3');
+    title.textContent = 'チーム分け（確定 ' + splitMembers.length + '人）';
+    detail.appendChild(title);
+
+    var stale = saved.some(function (r) { return !!r.stale; });
+    if (stale) {
+      var warn = document.createElement('p');
+      warn.className = 'danger-text';
+      warn.textContent = '申込が変わっています。再分けしてください。';
+      detail.appendChild(warn);
+    }
+    // 保存済みのチーム分けがあれば、最初にそれを表示する。
+    var current = null;
+    if (saved.length > 0) {
+      current = savedTeamsToSplit(saved, splitMembers);
+      var savedNote = document.createElement('p');
+      savedNote.className = 'muted';
+      var savedAt = saved[0] && saved[0].saved_at ? UI().fmtDateTimeJST(saved[0].saved_at) : '';
+      savedNote.textContent = '保存済みのチーム分けがあります。' + (savedAt ? '（保存: ' + savedAt + '）' : '') + '「自動で分ける」で分け直せます。';
+      detail.appendChild(savedNote);
+    }
+
+    var form = document.createElement('form');
+    form.className = 'form';
+    var teamSel = document.createElement('select');
+    [['2', '2チーム'], ['3', '3チーム']].forEach(function (kv) {
+      var o = document.createElement('option');
+      o.value = kv[0];
+      o.textContent = kv[1];
+      teamSel.appendChild(o);
+    });
+    teamSel.value = splitMembers.length <= 12 ? '2' : '3';
+    fieldRow(form, 'チーム数', teamSel);
+    var sizesI = fieldRow(form, 'チームごとの人数（例: 7,7）', inputOf('text', '', false));
+    sizesI.placeholder = '例: 7,7 / 5,5,6（空欄なら均等に分けます）';
+    sizesI.maxLength = 20;
+    var sizeNote = document.createElement('p');
+    sizeNote.className = 'muted';
+    sizeNote.textContent = '人数を指定しない場合は、人数差が最大 1 になるよう均等に分けます。';
+    form.appendChild(sizeNote);
+    var err = document.createElement('p');
+    err.className = 'field-error';
+    err.hidden = true;
+    form.appendChild(err);
+    var autoBtn = document.createElement('button');
+    autoBtn.type = 'submit';
+    autoBtn.className = 'btn btn-navy';
+    autoBtn.textContent = '自動で分ける';
+    form.appendChild(autoBtn);
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      err.hidden = true;
+      var teamCount = parseInt(teamSel.value, 10);
+      var sizesText = (sizesI.value || '').trim();
+      var sizes = null;
+      if (sizesText !== '') {
+        var parts = sizesText.split(',');
+        if (parts.length !== teamCount || parts.some(function (s) { return !/^\d+$/.test(s.trim()); })) {
+          err.textContent = '人数は「7,7」のように、カンマ区切りでチーム数分入力してください。';
+          err.hidden = false;
+          return;
+        }
+        sizes = parts.map(function (s) { return parseInt(s.trim(), 10); });
+      }
+      var Pure = window.V18Pure;
+      if (!Pure || !Pure.splitTeams) {
+        err.textContent = 'チーム分けの読み込みに失敗しました。ページを読み込み直してください。';
+        err.hidden = false;
+        return;
+      }
+      try {
+        current = Pure.splitTeams(splitMembers, teamCount, sizes);
+        selected = null;
+        renderTeams();
+      } catch (ex) {
+        // 人数の合計不一致など。メッセージはそのまま出す。
+        err.textContent = ex && ex.message ? ex.message : '自動分けに失敗しました。';
+        err.hidden = false;
+      }
+    });
+    detail.appendChild(form);
+
+    var teamsEl = document.createElement('div');
+    detail.appendChild(teamsEl);
+
+    var selected = null; // {memberNo, teamNo}: タップで選択中のメンバー
+    function teamScore(members) {
+      var score = { S: 5, A: 4, B: 3, C: 2, D: 1 };
+      return members.reduce(function (sum, m) {
+        return sum + (m.skillLevel && score[m.skillLevel] ? score[m.skillLevel] : 2);
+      }, 0);
+    }
+    function renderTeams() {
+      teamsEl.innerHTML = '';
+      if (!current) {
+        var hint = document.createElement('p');
+        hint.className = 'muted';
+        hint.textContent = '「自動で分ける」を押すと、レベルとセッターを考えて分けます。';
+        teamsEl.appendChild(hint);
+        saveBtn.disabled = true;
+        return;
+      }
+      saveBtn.disabled = false;
+      current.forEach(function (t) {
+        var box = document.createElement('div');
+        box.className = 'my-reg-item';
+        var h = document.createElement('h3');
+        h.textContent = UI().teamLabel(t.teamNo) + '（' + t.members.length + '人・合計 ' + teamScore(t.members) + '）';
+        box.appendChild(h);
+        var ul = document.createElement('ul');
+        ul.className = 'roster-list';
+        t.members.forEach(function (m) {
+          var li = document.createElement('li');
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn btn-small ' + (selected && selected.memberNo === m.memberNo ? 'btn-navy' : 'btn-ghost');
+          btn.textContent = (m.lineName || '-') + '（' + (m.skillLevel || '未設定') + '・' + UI().positionLabel(m.position || '') + '）';
+          btn.addEventListener('click', function () {
+            if (!selected) { selected = { memberNo: m.memberNo, teamNo: t.teamNo }; renderTeams(); return; }
+            if (selected.memberNo === m.memberNo) { selected = null; renderTeams(); return; }
+            if (selected.teamNo === t.teamNo) { selected = { memberNo: m.memberNo, teamNo: t.teamNo }; renderTeams(); return; }
+            // 別チームの 2 人を交換する。
+            var from = null, to = null;
+            current.forEach(function (team) {
+              team.members.forEach(function (mm, idx) {
+                if (mm.memberNo === selected.memberNo) { from = { team: team, idx: idx, member: mm }; }
+                if (mm.memberNo === m.memberNo) { to = { team: team, idx: idx, member: mm }; }
+              });
+            });
+            if (from && to) {
+              from.team.members[from.idx] = to.member;
+              to.team.members[to.idx] = from.member;
+            }
+            selected = null;
+            renderTeams();
+          });
+          li.appendChild(btn);
+          ul.appendChild(li);
+        });
+        box.appendChild(ul);
+        teamsEl.appendChild(box);
+      });
+      var tapNote = document.createElement('p');
+      tapNote.className = 'muted';
+      tapNote.textContent = '2 人をタップするとチームを交換できます。保存するまで何度でも変えられます。';
+      teamsEl.appendChild(tapNote);
+    }
+
+    var saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn btn-navy btn-large';
+    saveBtn.textContent = 'チーム分けを保存する';
+    saveBtn.disabled = true;
+    saveBtn.addEventListener('click', async function () {
+      if (!current) { return; }
+      var teams = [];
+      current.forEach(function (t) {
+        t.members.forEach(function (m) {
+          teams.push({ member_no: m.memberNo, team_no: t.teamNo });
+        });
+      });
+      saveBtn.disabled = true;
+      try {
+        await Api().adminSaveTeams(pid(p), teams);
+        UI().toast('チーム分けを保存しました。');
+      } catch (ex) {
+        UI().toast('保存できませんでした。' + UI().friendlyError(ex));
+        saveBtn.disabled = false;
+      }
+    });
+    detail.appendChild(saveBtn);
+    renderTeams();
+  }
+
+  // admin_list_teams の行を splitTeams と同じ形に組み立てる。
+  // 保存済みにない確定者 (保存後に増えた人) はここには載せず、
+  // stale 警告で再分けを促す。
+  function savedTeamsToSplit(saved, splitMembers) {
+    var byNo = {};
+    splitMembers.forEach(function (m) { byNo[m.memberNo] = m; });
+    var teams = [];
+    var byTeam = {};
+    saved.forEach(function (r) {
+      var m = byNo[r.member_no];
+      if (!m) { return; }
+      if (!byTeam[r.team_no]) {
+        byTeam[r.team_no] = { teamNo: r.team_no, members: [] };
+        teams.push(byTeam[r.team_no]);
+      }
+      byTeam[r.team_no].members.push(m);
+    });
+    teams.sort(function (a, b) { return a.teamNo - b.teamNo; });
+    return teams;
   }
 
   // 招待管理 (SQL 19): 非公開の試合・大会にだけ表示する。

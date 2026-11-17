@@ -176,6 +176,8 @@
       });
     },
     listPractices: function () { return callRpc('list_practices', { p_token: getToken() }); },
+    // 過去の練習 (SQL 21): 自分に申込行がある過去の練習だけを返す。
+    listPastPractices: function () { return callRpc('list_past_practices', { p_token: getToken() }); },
     listPracticesForMonth: function (year, month) {
       return callRpc('list_practices_for_month', { p_token: getToken(), p_year: year, p_month: month });
     },
@@ -204,6 +206,14 @@
     },
     getPracticeRoster: function (practiceId) {
       return callRpc('get_practice_roster', { p_token: getToken(), p_practice_id: practiceId });
+    },
+    // 運営からのお知らせ (SQL 22): 申込済みの練習のお知らせを新しい順に返す (最大 5 件)。
+    listMyAnnouncements: function (practiceId) {
+      return callRpc('list_my_announcements', { p_token: getToken(), p_practice_id: practiceId });
+    },
+    // 自分のチーム (SQL 22): 未割当は 0 行。team_label は 'Aチーム' 等。
+    getMyTeam: function (practiceId) {
+      return callRpc('get_my_team', { p_token: getToken(), p_practice_id: practiceId });
     },
     // 非公開イベントへの招待 (SQL 19)。承認待ち・保留中の招待を返す。
     listMyInvitations: function () {
@@ -252,7 +262,8 @@
         p_kind: p.kind || 'practice',
         p_capacity_men: p.capacityMen !== undefined ? p.capacityMen : null,
         p_capacity_women: p.capacityWomen !== undefined ? p.capacityWomen : null,
-        p_visibility: p.visibility !== undefined ? p.visibility : null
+        p_visibility: p.visibility !== undefined ? p.visibility : null,
+        p_video_url: p.videoUrl || null
       });
     },
     adminUpdatePractice: function (practiceId, p) {
@@ -262,7 +273,8 @@
         p_kind: p.kind || null,
         p_capacity_men: p.capacityMen !== undefined ? p.capacityMen : null,
         p_capacity_women: p.capacityWomen !== undefined ? p.capacityWomen : null,
-        p_visibility: p.visibility !== undefined ? p.visibility : null
+        p_visibility: p.visibility !== undefined ? p.visibility : null,
+        p_video_url: p.videoUrl !== undefined ? p.videoUrl : null
       });
     },
     adminCancelPractice: function (practiceId, reason) {
@@ -313,6 +325,36 @@
         p_practice_id: practiceId, p_member_no: memberNo, p_result: result, p_reason: reason || ''
       });
     },
+    // --- v18 (SQL 22): お知らせ・チーム分け・出席率・リマインド ---
+    // レベル設定 (SQL 22): p_skill_level は 'S'/'A'/'B'/'C'/'D'、null でクリア。
+    adminSetSkillLevel: function (memberNo, skillLevel) {
+      return callRpc('admin_set_skill_level', { p_member_no: memberNo, p_skill_level: skillLevel || null });
+    },
+    adminSendAnnouncement: function (practiceId, message) {
+      return callRpc('admin_send_announcement', { p_practice_id: practiceId, p_message: message });
+    },
+    adminListAnnouncements: function (practiceId) {
+      return callRpc('admin_list_announcements', { p_practice_id: practiceId });
+    },
+    adminDeleteAnnouncement: function (announcementId) {
+      return callRpc('admin_delete_announcement', { p_announcement_id: announcementId });
+    },
+    // チーム分けの保存。teams は [{member_no, team_no}] の配列。
+    adminSaveTeams: function (practiceId, teams) {
+      return callRpc('admin_save_teams', { p_practice_id: practiceId, p_teams: teams });
+    },
+    adminListTeams: function (practiceId) {
+      return callRpc('admin_list_teams', { p_practice_id: practiceId });
+    },
+    // 開催済み練習の出欠入力。attendance は 'attended'/'absent'/null (未入力に戻す)。
+    adminSetAttendance: function (practiceId, memberNo, attendance) {
+      return callRpc('admin_set_attendance', {
+        p_practice_id: practiceId, p_member_no: memberNo, p_attendance: attendance || null
+      });
+    },
+    adminMemberStats: function () { return callRpc('admin_member_stats', {}); },
+    // 明日のリマインドを手動送信。{ok, practices, reminded} を返す。
+    adminSendReminders: function () { return callRpc('admin_send_reminders', {}); },
     adminListMembers: function (query) {
       return callRpc('admin_list_members', { p_query: query || '' });
     },

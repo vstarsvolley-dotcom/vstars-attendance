@@ -172,6 +172,35 @@
           + (m.volleyball_experience ? ' ｜ バレー歴: ' + m.volleyball_experience : '')
           + (m.line_group_joined_date ? ' ｜ LINEグループ参加: ' + UI().fmtDateJST(m.line_group_joined_date) : '');
         card.appendChild(p);
+        // v18: レベル設定 (管理者のみ。会員には見せない隠し項目)。
+        var levelRow = document.createElement('div');
+        levelRow.className = 'field';
+        var levelLabel = document.createElement('label');
+        levelLabel.textContent = 'レベル（管理者のみ）';
+        levelRow.appendChild(levelLabel);
+        var levelSel = document.createElement('select');
+        [['', '未設定'], ['S', 'S（全国）'], ['A', 'A（かなりうまい）'], ['B', 'B（うまい）'], ['C', 'C（これから）'], ['D', 'D（初心者）']].forEach(function (kv) {
+          var o = document.createElement('option');
+          o.value = kv[0];
+          o.textContent = kv[1];
+          levelSel.appendChild(o);
+        });
+        levelSel.value = m.skill_level || '';
+        var prevLevel = m.skill_level || '';
+        levelSel.addEventListener('change', async function () {
+          var next = levelSel.value || null;
+          try {
+            await Api().adminSetSkillLevel(m.member_no, next);
+            prevLevel = levelSel.value;
+            m.skill_level = next;
+            UI().toast(next ? 'レベルを' + next + 'に設定しました。' : 'レベルを未設定にしました。');
+          } catch (e) {
+            UI().toast('レベルの設定に失敗しました。' + UI().friendlyError(e));
+            levelSel.value = prevLevel;
+          }
+        });
+        levelRow.appendChild(levelSel);
+        card.appendChild(levelRow);
         var detail = document.createElement('div');
         card.appendChild(detail);
         var actions = document.createElement('div');
