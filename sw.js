@@ -5,7 +5,7 @@
  */
 'use strict';
 
-var CACHE_NAME = 'vstars-v20';
+var CACHE_NAME = 'vstars-v21';
 var CORE_ASSETS = [
   './',
   './index.html',
@@ -85,16 +85,25 @@ self.addEventListener('push', function (event) {
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
   var targetUrl = (event.notification.data && event.notification.data.url) || '/';
-  // 通知の URL は '/#/practice/<id>' のようなアプリ内パス。
-  // そのまま new URL() するとドメイン直下 (GitHub Pages のルート) になって
-  // 404 になるため、Service Worker の scope (= アプリの配置パス) を基点にする。
+  // 通知の URL には2形式ある:
+  //   (a) '/#/practice/<id>' のようなアプリ内パス → scope を基点に解決する
+  //   (b) '/vstars-attendance/#/practice/<id>' のように配置パスを含む絶対パス
+  //       (SQL 22 以降の _enqueue_push が生成) → そのまま origin に付ける
+  // (b) を scope 基点で解決するとパスが二重になり GitHub Pages の 404 になる。
   var fullUrl;
   if (/^https?:\/\//i.test(targetUrl)) {
     fullUrl = targetUrl;
   } else {
-    var base = self.registration.scope.replace(/\/$/, '');
-    var path = targetUrl.charAt(0) === '/' ? targetUrl : '/' + targetUrl;
-    fullUrl = base + path;
+    var scopePath = new URL(self.registration.scope).pathname.replace(/\/$/, '');
+    if (targetUrl === scopePath
+      || targetUrl.indexOf(scopePath + '/') === 0
+      || targetUrl.indexOf(scopePath + '#') === 0) {
+      fullUrl = self.location.origin + targetUrl;
+    } else {
+      var base = self.registration.scope.replace(/\/$/, '');
+      var path = targetUrl.charAt(0) === '/' ? targetUrl : '/' + targetUrl;
+      fullUrl = base + path;
+    }
   }
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clients) {
