@@ -200,6 +200,14 @@
     return { ok: true, length: t.length };
   }
 
+  // チャットメッセージのバリデーション (最大 1000 字、SQL 29 と一致)。
+  function validateChatMessage(text) {
+    var t = (text === null || text === undefined) ? '' : String(text).trim();
+    if (t.length === 0) { return { ok: false, error: 'empty_message' }; }
+    if (t.length > 1000) { return { ok: false, error: 'message_too_long' }; }
+    return { ok: true, length: t.length };
+  }
+
   // 前日リマインドの対象抽出 (純粋関数)。
   // practices: [{id, practiceDate, status}]
   // registrations: [{practiceId, memberId, status}]
@@ -280,6 +288,7 @@
     create_notice: 'お知らせを投稿',
     create_practice: '練習を作成',
     delete_announcement: 'お知らせを削除',
+    delete_practice_message: 'チャットメッセージを削除',
     delete_notice: '全体お知らせを削除',
     delete_member: 'メンバーを削除',
     demote_registration: 'キャンセル待ちに戻した',
@@ -384,6 +393,7 @@
   return {
     splitTeams: splitTeams,
     validateAnnouncementMessage: validateAnnouncementMessage,
+    validateChatMessage: validateChatMessage,
     filterReminderTargets: filterReminderTargets,
     statsPeriodRange: statsPeriodRange,
     practiceCounts: practiceCounts,

@@ -39,6 +39,19 @@
       practicesCache = Array.isArray(rows) ? rows : [];
       drawList(view);
       window.VstarsMemberApp.refreshBanner();
+      // プッシュ通知からのディープリンク: #/practice/<id>/chat なら
+      // 対象のチャットを自動で開く (SQL 29)。
+      var m = (window.location.hash || '').match(/^#\/practice\/([0-9a-fA-F-]{36})\/chat$/);
+      if (m && window.VstarsChat) {
+        var target = null;
+        practicesCache.forEach(function (p) { if (practiceId(p) === m[1]) { target = p; } });
+        window.VstarsChat.open({
+          practiceId: m[1], mode: 'member',
+          title: target
+            ? UI().fmtDateTimeJST(target.practice_date, target.start_time, target.end_time) + ' ' + (target.venue || '')
+            : 'チャット'
+        });
+      }
     }).catch(function (e) {
       UI().showError(view, '練習を読み込めませんでした。' + (e && e.message ? ' ' + e.message : ''), renderPractices);
     });
@@ -136,7 +149,15 @@
       // 過去タブは申込・キャンセル・まとめ申し込みを出さない (カード側でも
       // 過去分は申込ボタンを出さない)。参加者表示と動画リンクは出る。
       var card = UI().renderPracticeCard(p, tab === 'past' ? {
-        onRoster: function (pr) { showRoster(pr); }
+        onRoster: function (pr) { showRoster(pr); },
+        onChat: function (pr) {
+          if (window.VstarsChat) {
+            window.VstarsChat.open({
+              practiceId: practiceId(pr), mode: 'member',
+              title: UI().fmtDateTimeJST(pr.practice_date, pr.start_time, pr.end_time) + ' ' + (pr.venue || '')
+            });
+          }
+        }
       } : {
         selected: selected,
         onToggleSelect: function (id, checked) {
@@ -145,6 +166,14 @@
         },
         onApply: function (pr) { applyOne(pr); },
         onCancel: function (pr) { cancelOne(pr); },
+        onChat: function (pr) {
+          if (window.VstarsChat) {
+            window.VstarsChat.open({
+              practiceId: practiceId(pr), mode: 'member',
+              title: UI().fmtDateTimeJST(pr.practice_date, pr.start_time, pr.end_time) + ' ' + (pr.venue || '')
+            });
+          }
+        },
         onRoster: function (pr) { showRoster(pr); }
       });
       list.appendChild(card);

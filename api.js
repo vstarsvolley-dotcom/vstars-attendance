@@ -359,6 +359,30 @@
     adminListMembers: function (query) {
       return callRpc('admin_list_members', { p_query: query || '' });
     },
+    // 練習試合・大会チャット (SQL 29)。opts: {before, after} (ISO文字列)
+    listPracticeMessages: function (practiceId, opts) {
+      opts = opts || {};
+      return callRpc('list_practice_messages', {
+        p_token: getToken(), p_practice_id: practiceId,
+        p_before: opts.before || null, p_after: opts.after || null
+      });
+    },
+    postPracticeMessage: function (practiceId, message) {
+      return callRpc('post_practice_message', { p_token: getToken(), p_practice_id: practiceId, p_message: message });
+    },
+    adminListPracticeMessages: function (practiceId, opts) {
+      opts = opts || {};
+      return callRpc('admin_list_practice_messages', {
+        p_practice_id: practiceId,
+        p_before: opts.before || null, p_after: opts.after || null
+      });
+    },
+    adminPostPracticeMessage: function (practiceId, message) {
+      return callRpc('admin_post_practice_message', { p_practice_id: practiceId, p_message: message });
+    },
+    adminDeletePracticeMessage: function (messageId) {
+      return callRpc('admin_delete_practice_message', { p_message_id: messageId });
+    },
     // 運営からのお知らせ欄 (SQL 28)。プッシュなし・アプリ内表示のみ。
     listNotices: function () { return callRpc('list_notices', { p_token: getToken() }); },
     adminListNotices: function () { return callRpc('admin_list_notices', {}); },

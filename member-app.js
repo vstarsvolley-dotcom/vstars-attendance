@@ -172,6 +172,13 @@
         markNav('practices');
         window.VstarsMemberPractices.renderPractices();
         break;
+      case 'practice':
+        // #/practice/<id>/chat (プッシュ通知のディープリンク、SQL 29)。
+        // 一覧を描画し、member-practices 側でチャットを自動で開く。
+        if (!isLoggedIn()) { window.location.hash = '#/login'; return; }
+        markNav('practices');
+        window.VstarsMemberPractices.renderPractices();
+        break;
       case 'calendar':
         if (!isLoggedIn()) { window.location.hash = '#/login'; return; }
         markNav('calendar');

@@ -584,6 +584,17 @@
     if (UI().isMatchOrTournament(p) && UI().isPrivate(p)) {
       addBtn('招待管理', 'btn-ghost', function () { showInvitations(p, detail, wrap); });
     }
+    // チャット (SQL 29): 試合・大会のみ。管理者も参加・投稿できる。
+    if (UI().isMatchOrTournament(p)) {
+      addBtn('チャット', 'btn-ghost', function () {
+        if (window.VstarsChat) {
+          window.VstarsChat.open({
+            practiceId: pid(p), mode: 'admin',
+            title: UI().fmtDateTimeJST(p.practice_date, p.start_time, p.end_time) + ' ' + (p.venue || '')
+          });
+        }
+      });
+    }
     if (p.is_cancelled) {
       addBtn('復旧', 'btn-ghost', async function () {
         try { await Api().adminRestorePractice(pid(p)); UI().toast('練習を復旧しました。'); renderAdminPractices(); }

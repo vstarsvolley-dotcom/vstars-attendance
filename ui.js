@@ -564,6 +564,16 @@
       actions.appendChild(videoLink);
     }
 
+    // チャット (SQL 29): 練習試合・大会のみ。一覧画面 (onChat あり) でのみ出す。
+    if (handlers.onChat && isMatchOrTournament(practice) && !cancelled) {
+      var chatBtn = document.createElement('button');
+      chatBtn.type = 'button';
+      chatBtn.className = 'btn btn-ghost btn-small';
+      chatBtn.textContent = 'チャット';
+      chatBtn.addEventListener('click', function () { handlers.onChat(practice); });
+      actions.appendChild(chatBtn);
+    }
+
     if (!cancelled && !isPast) {
       if (myStatus === '未申込') {
         // まとめ申し込みのチェックボックスは、一覧画面でのみ出す。
