@@ -379,13 +379,18 @@
         p_position: m.position || null
       });
     },
+    // ユニフォーム購入フラグの即時切替 (SQL 27)。
+    adminSetUniformPurchased: function (memberNo, purchased) {
+      return callRpc('admin_set_uniform_purchased', { p_member_no: memberNo, p_purchased: !!purchased });
+    },
     adminUpdateMember: function (memberNo, m) {
       return callRpc('admin_update_member', {
         p_member_no: memberNo, p_real_name: m.realName, p_line_name: m.lineName,
         p_gender: m.gender, p_birth_date: m.birthDate, p_admin_note: m.adminNote || '',
         p_age: m.age !== undefined ? m.age : null,
         p_volleyball_experience: m.volleyballExperience || null,
-        p_position: m.position || null
+        p_position: m.position || null,
+        p_uniform_purchased: m.uniformPurchased !== undefined ? m.uniformPurchased : null
       });
     },
     adminResetPin: function (memberNo) { return callRpc('admin_reset_pin', { p_member_no: memberNo }); },

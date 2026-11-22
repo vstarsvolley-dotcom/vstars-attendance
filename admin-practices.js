@@ -24,19 +24,31 @@
   var adminCache = [];
 
   // LINE 名 + 会員番号の選択肢を作る (list_member_names は LINE 名と会員番号のみ返す)
-  async function fillMemberSelect(selectEl) {
-    selectEl.innerHTML = '<option value="">選択してください</option>';
-    try {
-      var names = await Api().listMemberNames();
-      (Array.isArray(names) ? names : []).forEach(function (m) {
-        var opt = document.createElement('option');
-        opt.value = String(m.member_no !== undefined ? m.member_no : m.memberNo);
-        opt.textContent = (m.line_name || m.lineName || '') + ' (No.' + opt.value + ')';
-        selectEl.appendChild(opt);
-      });
-    } catch (e) {
-      UI().toast('メンバー名簿を取得できませんでした。');
+  // メンバー選択肢を埋める。members を渡すとその一覧 (絞り込み済み) で埋め、
+  // 省略時は admin_list_members から現役メンバーを取得する (SQL 27)。
+  // 特徴メモ・ユニフォーム購入の情報が要るため、名簿専用の
+  // list_member_names ではなく管理者用一覧を使う。
+  async function fillMemberSelect(selectEl, members) {
+    var rows = members;
+    if (!rows) {
+      try {
+        var all = await Api().adminListMembers('');
+        rows = (Array.isArray(all) ? all : []).filter(function (m) {
+          return m && m.status !== 'withdrawn' && !m.is_withdrawn;
+        });
+      } catch (e) {
+        UI().toast('メンバー名簿を取得できませんでした。');
+        rows = [];
+      }
     }
+    selectEl.innerHTML = '<option value="">選択してください</option>';
+    (Array.isArray(rows) ? rows : []).forEach(function (m) {
+      var opt = document.createElement('option');
+      opt.value = String(m.member_no !== undefined ? m.member_no : m.memberNo);
+      opt.textContent = (m.line_name || m.lineName || '') + ' (No.' + opt.value + ')'
+        + (m.uniform_purchased ? '・ユニフォーム済' : '');
+      selectEl.appendChild(opt);
+    });
   }
 
   function renderAdminPractices() {
@@ -1073,6 +1085,28 @@
 
       var form = document.createElement('form');
       form.className = 'form';
+      // 絞り込み (SQL 27): キーワード (LINE名・本名・特徴メモ) と
+      // ユニフォーム購入済みのみ。大会・練習試合の招待先選び用。
+      var filterQ = document.createElement('input');
+      filterQ.type = 'search';
+      filterQ.placeholder = 'LINE名・本名・特徴メモで絞り込み';
+      var filterQWrap = document.createElement('div');
+      filterQWrap.className = 'field';
+      var filterQLabel = document.createElement('label');
+      filterQLabel.textContent = '絞り込み';
+      filterQWrap.appendChild(filterQLabel);
+      filterQWrap.appendChild(filterQ);
+      form.appendChild(filterQWrap);
+      var uniOnlyLab = document.createElement('label');
+      uniOnlyLab.className = 'checkbox-item';
+      var uniOnlyCb = document.createElement('input');
+      uniOnlyCb.type = 'checkbox';
+      uniOnlyLab.appendChild(uniOnlyCb);
+      uniOnlyLab.appendChild(document.createTextNode('ユニフォーム購入済みのみ'));
+      form.appendChild(uniOnlyLab);
+      var filterCount = document.createElement('p');
+      filterCount.className = 'muted';
+      form.appendChild(filterCount);
       var sel = document.createElement('select');
       sel.required = true;
       var ph = document.createElement('option');
@@ -1080,7 +1114,24 @@
       ph.textContent = 'メンバーを選択';
       sel.appendChild(ph);
       form.appendChild(sel);
-      fillMemberSelect(sel);
+      var allMembers = [];
+      function applyInviteFilter() {
+        if (window.V19Pure && window.V19Pure.filterInviteCandidates) {
+          var filtered = window.V19Pure.filterInviteCandidates(allMembers, {
+            query: filterQ.value, uniformOnly: uniOnlyCb.checked
+          });
+          filterCount.textContent = '対象 ' + filtered.length + '名';
+          fillMemberSelect(sel, filtered);
+        } else {
+          fillMemberSelect(sel, allMembers);
+        }
+      }
+      Api().adminListMembers('').then(function (rows) {
+        allMembers = Array.isArray(rows) ? rows : [];
+        applyInviteFilter();
+      }).catch(function () { fillMemberSelect(sel); });
+      filterQ.addEventListener('input', applyInviteFilter);
+      uniOnlyCb.addEventListener('change', applyInviteFilter);
       var send = document.createElement('button');
       send.type = 'submit';
       send.className = 'btn btn-navy';

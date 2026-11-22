@@ -93,8 +93,8 @@
 
     var searchForm = document.createElement('form');
     searchForm.className = 'form';
-    var q = fieldRow(searchForm, 'メンバー検索 (LINE名 / 本名)', inputOf('search', '', false));
-    q.placeholder = 'LINE名または本名で検索';
+    var q = fieldRow(searchForm, 'メンバー検索 (LINE名 / 本名 / 特徴メモ)', inputOf('search', '', false));
+    q.placeholder = 'LINE名・本名・メモで検索';
     var searchBtn = document.createElement('button');
     searchBtn.type = 'submit';
     searchBtn.className = 'btn btn-navy';
@@ -201,6 +201,39 @@
         });
         levelRow.appendChild(levelSel);
         card.appendChild(levelRow);
+        // 特徴メモ (SQL 27): 管理者だけが見える自由メモ。一覧にも出す。
+        if (m.admin_note) {
+          var memoP = document.createElement('p');
+          memoP.className = 'muted';
+          memoP.textContent = '特徴メモ: ' + m.admin_note;
+          card.appendChild(memoP);
+        }
+        // ユニフォーム購入 (SQL 27): その場で切り替えるチェック。
+        var uniRow = document.createElement('div');
+        uniRow.className = 'field';
+        var uniLabel = document.createElement('label');
+        uniLabel.textContent = 'ユニフォーム（管理者のみ）';
+        uniRow.appendChild(uniLabel);
+        var uniLab = document.createElement('label');
+        uniLab.className = 'checkbox-item';
+        var uniCb = document.createElement('input');
+        uniCb.type = 'checkbox';
+        uniCb.checked = !!m.uniform_purchased;
+        uniLab.appendChild(uniCb);
+        uniLab.appendChild(document.createTextNode('購入済み'));
+        uniCb.addEventListener('change', async function () {
+          var next = uniCb.checked;
+          try {
+            await Api().adminSetUniformPurchased(m.member_no, next);
+            m.uniform_purchased = next;
+            UI().toast(next ? 'ユニフォーム購入済みにしました。' : 'ユニフォーム未購入に戻しました。');
+          } catch (e) {
+            UI().toast('ユニフォーム購入の変更に失敗しました。' + UI().friendlyError(e));
+            uniCb.checked = !next;
+          }
+        });
+        uniRow.appendChild(uniLab);
+        card.appendChild(uniRow);
         var detail = document.createElement('div');
         card.appendChild(detail);
         var actions = document.createElement('div');
@@ -315,7 +348,15 @@
     var noteI = document.createElement('textarea');
     noteI.value = m.admin_note || '';
     noteI.maxLength = 500;
-    fieldRow(form, '管理者メモ', noteI);
+    fieldRow(form, '特徴メモ（管理者のみ表示）', noteI);
+    var uniEditLab = document.createElement('label');
+    uniEditLab.className = 'checkbox-item';
+    var uniEditCb = document.createElement('input');
+    uniEditCb.type = 'checkbox';
+    uniEditCb.checked = !!m.uniform_purchased;
+    uniEditLab.appendChild(uniEditCb);
+    uniEditLab.appendChild(document.createTextNode('ユニフォーム購入済み'));
+    fieldRow(form, 'ユニフォーム', uniEditLab);
     var submit = document.createElement('button');
     submit.type = 'submit';
     submit.className = 'btn btn-navy';
@@ -336,6 +377,7 @@
           // 既存値を維持すること (直書きすると消えてしまうため。未検証の前提。README 参照)。
           birthDate: isOwner ? (birthI && birthI.value ? birthI.value : null) : null,
           adminNote: noteI.value.trim(),
+          uniformPurchased: uniEditCb.checked,
           age: ageI.value === '' ? null : parseInt(ageI.value, 10),
           volleyballExperience: expI.value.trim(),
           position: (function () { var v = posChecks.filter(function (c) { return c.checked; }).map(function (c) { return c.value; }); return v.length ? v : null; })()

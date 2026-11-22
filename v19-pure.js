@@ -307,6 +307,7 @@
     set_initial_pin: '初期PINを設定',
     set_pin_name_failed: 'PIN設定の本人確認に失敗',
     set_skill_level: 'レベルを設定',
+    set_uniform_purchased: 'ユニフォーム購入を変更',
     update_member: 'メンバー情報を編集',
     update_practice: '練習を編集',
     verify_pin_failed: 'PINログインに失敗'
@@ -358,12 +359,33 @@
     };
   }
 
+  // 招待ピッカーの絞り込み (SQL 27)。
+  // members: admin_list_members の行。opts: {query, uniformOnly}。
+  // query は LINE名・本名・特徴メモ (admin_note) への部分一致 (大小無視)。
+  // 退会済みは常に除外する。
+  function filterInviteCandidates(members, opts) {
+    opts = opts || {};
+    var q = String(opts.query || '').trim().toLowerCase();
+    var uniformOnly = !!opts.uniformOnly;
+    return (Array.isArray(members) ? members : []).filter(function (m) {
+      if (!m || m.status === 'withdrawn' || m.is_withdrawn) { return false; }
+      if (uniformOnly && !m.uniform_purchased) { return false; }
+      if (q) {
+        var hay = [m.line_name, m.real_name, m.admin_note]
+          .map(function (v) { return String(v || '').toLowerCase(); }).join('\n');
+        if (hay.indexOf(q) === -1) { return false; }
+      }
+      return true;
+    });
+  }
+
   return {
     splitTeams: splitTeams,
     validateAnnouncementMessage: validateAnnouncementMessage,
     filterReminderTargets: filterReminderTargets,
     statsPeriodRange: statsPeriodRange,
     practiceCounts: practiceCounts,
+    filterInviteCandidates: filterInviteCandidates,
     auditActionLabel: auditActionLabel,
     auditDetailText: auditDetailText,
     AUDIT_ACTION_LABELS: AUDIT_ACTION_LABELS
