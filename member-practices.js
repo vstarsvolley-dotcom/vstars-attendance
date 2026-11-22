@@ -37,6 +37,13 @@
     var load = tab === 'past' ? Api().listPastPractices() : Api().listPractices();
     load.then(function (rows) {
       practicesCache = Array.isArray(rows) ? rows : [];
+      // 開催日ソートをフロントでも保証する (今後は近い順、過去は新しい順。
+      // 同日は開始時刻順)。
+      practicesCache.sort(function (a, b) {
+        var ka = String(a.practice_date || '') + ' ' + String(a.start_time || '');
+        var kb = String(b.practice_date || '') + ' ' + String(b.start_time || '');
+        return tab === 'past' ? kb.localeCompare(ka) : ka.localeCompare(kb);
+      });
       drawList(view);
       window.VstarsMemberApp.refreshBanner();
       // プッシュ通知からのディープリンク: #/practice/<id>/chat なら

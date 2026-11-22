@@ -348,7 +348,14 @@
       return;
     }
     var list = Array.isArray(practices) ? practices : [];
-    list.sort(function (a, b) { return String(b.practice_date || '').localeCompare(String(a.practice_date || '')); });
+    // 開催日ソート (作成順ではない)。今後・すべては近い順、開催済みは新しい順。
+    // 同日は開始時刻も含めて並べる。
+    var pastView = listFilter === 'past';
+    list.sort(function (a, b) {
+      var ka = String(a.practice_date || '') + ' ' + String(a.start_time || '');
+      var kb = String(b.practice_date || '') + ' ' + String(b.start_time || '');
+      return pastView ? kb.localeCompare(ka) : ka.localeCompare(kb);
+    });
     // 表示範囲で絞る (日付は JST の今日と比較。今日の練習は「今後の練習」)。
     var today = UI().jstTodayStr();
     var upcoming = list.filter(function (p) { return String(p.practice_date || '') >= today; });
