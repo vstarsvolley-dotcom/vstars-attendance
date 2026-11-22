@@ -66,6 +66,87 @@ s.appendChild(h);
 return s;
 }
 
+async function renderNoticesAdmin(body) {
+body.innerHTML = '';
+var form = document.createElement('form');
+form.className = 'form';
+var ta = document.createElement('textarea');
+ta.maxLength = 500;
+ta.rows = 3;
+ta.placeholder = '全メンバー向けのお知らせを入力';
+var taWrap = document.createElement('div');
+taWrap.className = 'field';
+var taLabel = document.createElement('label');
+taLabel.textContent = '新規お知らせ（500文字まで・プッシュは送られません）';
+taWrap.appendChild(taLabel);
+taWrap.appendChild(ta);
+form.appendChild(taWrap);
+var postBtn = document.createElement('button');
+postBtn.type = 'submit';
+postBtn.className = 'btn btn-navy';
+postBtn.textContent = '投稿する';
+form.appendChild(postBtn);
+body.appendChild(form);
+var listWrap = document.createElement('div');
+listWrap.innerHTML = '<p>読み込み中…</p>';
+body.appendChild(listWrap);
+form.addEventListener('submit', async function (e) {
+e.preventDefault();
+var v = window.V19Pure && window.V19Pure.validateAnnouncementMessage
+? window.V19Pure.validateAnnouncementMessage(ta.value) : { ok: true };
+if (!v.ok) {
+UI().toast(v.error === 'message_too_long'? '500文字以内で入力してください。': 'お知らせを入力してください。');
+return;
+}
+postBtn.disabled = true;
+try {
+await Api().adminCreateNotice(ta.value.trim());
+UI().toast('お知らせを投稿しました。');
+renderNoticesAdmin(body);
+} catch (ex) {
+UI().toast('投稿に失敗しました。' + UI().friendlyError(ex));
+postBtn.disabled = false;
+}
+});
+try {
+var rows = await Api().adminListNotices();
+var list = Array.isArray(rows)? rows: [];
+listWrap.innerHTML = '';
+if (list.length === 0) {
+listWrap.innerHTML = '<p class="muted">お知らせはまだありません。</p>';
+return;
+}
+list.forEach(function (n) {
+var item = document.createElement('div');
+var meta = document.createElement('p');
+meta.className = 'muted';
+meta.textContent = UI().fmtDateTimeJST(n.created_at) + (n.created_by_line_name? '　投稿: ' + n.created_by_line_name: '');
+item.appendChild(meta);
+var msg = document.createElement('p');
+msg.style.whiteSpace = 'pre-wrap';
+msg.textContent = n.message || '';
+item.appendChild(msg);
+var del = document.createElement('button');
+del.type = 'button';
+del.className = 'btn btn-cancel btn-small';
+del.textContent = '削除';
+del.addEventListener('click', async function () {
+var ok = await UI().confirmSheet({ title: 'お知らせを削除しますか？', body: 'このお知らせを削除します。', okLabel: '削除する', danger: true });
+if (!ok) { return; }
+try {
+await Api().adminDeleteNotice(n.notice_id);
+UI().toast('お知らせを削除しました。');
+renderNoticesAdmin(body);
+} catch (ex) { UI().toast('削除に失敗しました。' + UI().friendlyError(ex)); }
+});
+item.appendChild(del);
+listWrap.appendChild(item);
+});
+} catch (e) {
+listWrap.innerHTML = '<p class="danger-text">お知らせを取得できませんでした。' + UI().esc(e && e.message? e.message: '') + '</p>';
+}
+}
+
 async function loadDashboard(wrap) {
 wrap.innerHTML = '';
 
@@ -228,6 +309,13 @@ mailBody.appendChild(mp);
 } catch (e) {
 mailBody.innerHTML = '<p class="danger-text">メール状況を取得できませんでした。' + UI().esc(e && e.message? e.message: '') + '</p>';
 }
+
+// --- 運営からのお知らせ欄 (SQL 28) ---
+var ntSec = section('運営からのお知らせ');
+var ntBody = document.createElement('div');
+ntSec.appendChild(ntBody);
+wrap.appendChild(ntSec);
+await renderNoticesAdmin(ntBody);
 }
 
 window.VstarsAdminDashboard = { renderDashboard: renderDashboard, lineMessage: lineMessage};

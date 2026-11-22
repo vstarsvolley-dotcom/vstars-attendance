@@ -44,6 +44,36 @@
     });
   }
 
+  // 運営からのお知らせ欄 (SQL 28): 練習一覧の上部に最新5件。
+  // 取得に失敗しても一覧自体は出す (お知らせ欄だけ出ない)。
+  async function loadNotices(wrap) {
+    var rows;
+    try {
+      rows = await Api().listNotices();
+    } catch (e) {
+      return;
+    }
+    var list = Array.isArray(rows) ? rows : [];
+    if (list.length === 0) { return; }
+    var h = document.createElement('h2');
+    h.className = 'section-title';
+    h.textContent = '運営からのお知らせ';
+    wrap.appendChild(h);
+    list.slice(0, 5).forEach(function (n) {
+      var card = document.createElement('article');
+      card.className = 'practice-card';
+      var date = document.createElement('p');
+      date.className = 'muted';
+      date.textContent = UI().fmtDateTimeJST(n.created_at);
+      card.appendChild(date);
+      var msg = document.createElement('p');
+      msg.style.whiteSpace = 'pre-wrap';
+      msg.textContent = n.message || '';
+      card.appendChild(msg);
+      wrap.appendChild(card);
+    });
+  }
+
   function drawList(view) {
     view.innerHTML = '';
     var title = document.createElement('h1');
@@ -82,6 +112,13 @@
       tabRow.appendChild(b);
     });
     view.appendChild(tabRow);
+
+    // お知らせ欄は今後タブのときだけ (過去タブには出さない)。
+    if (tab === 'upcoming') {
+      var noticesWrap = document.createElement('div');
+      view.appendChild(noticesWrap);
+      loadNotices(noticesWrap);
+    }
 
     if (practicesCache.length === 0) {
       // 空のメッセージは一覧の枠の中だけに出す。view 全体に showEmpty すると

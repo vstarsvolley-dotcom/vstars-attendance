@@ -359,6 +359,11 @@
     adminListMembers: function (query) {
       return callRpc('admin_list_members', { p_query: query || '' });
     },
+    // 運営からのお知らせ欄 (SQL 28)。プッシュなし・アプリ内表示のみ。
+    listNotices: function () { return callRpc('list_notices', { p_token: getToken() }); },
+    adminListNotices: function () { return callRpc('admin_list_notices', {}); },
+    adminCreateNotice: function (message) { return callRpc('admin_create_notice', { p_message: message }); },
+    adminDeleteNotice: function (noticeId) { return callRpc('admin_delete_notice', { p_notice_id: noticeId }); },
     // 監査ログ (SQL 26)。opts: {limit, offset, action, actorRole, memberNo, days}
     adminListAuditLogs: function (opts) {
       opts = opts || {};
