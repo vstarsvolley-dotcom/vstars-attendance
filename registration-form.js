@@ -26,6 +26,13 @@ var h = window.location.hash || '';
 return h.indexOf('src=existing')!== -1;
 }
 
+function isSnsMode() {
+// SNS 仮登録用 URL (#/register?src=sns)。Instagram / Threads で参加希望の
+// 人に渡し、本人に仮登録させる。承認しても新規のまま (SQL 31)。
+var h = window.location.hash || '';
+return h.indexOf('src=sns')!== -1;
+}
+
 function fieldRow(form, labelText, input) {
 var div = document.createElement('div');
 div.className = 'field';
@@ -52,6 +59,7 @@ if (!view) { return;}
 view.innerHTML = '';
 var agentMode = isAgentMode();
 var existingMode = isExistingMode();
+var snsMode = isSnsMode();
 // API キーはこのクロージャ変数にのみ保持する (保存・URL 埋め込みなし)
 var agentApiKey = '';
 
@@ -62,7 +70,7 @@ view.appendChild(title);
 
 // 通常 URL からの申請は停止した (SQL 30)。代理モードと既存メンバー用
 // URL 以外は、フォームを出さずに案内だけ表示する。
-if (!agentMode && !existingMode) {
+if (!agentMode && !existingMode && !snsMode) {
 var closedP1 = document.createElement('p');
 closedP1.textContent = '現在、アプリからの新規登録は受け付けていません。';
 view.appendChild(closedP1);
@@ -91,6 +99,13 @@ existingNote.textContent = '既存メンバー用の登録フォームです。�
 view.appendChild(existingNote);
 }
 
+if (snsMode) {
+var snsNote = document.createElement('p');
+snsNote.className = 'muted';
+snsNote.textContent = 'SNS から参加希望の方の仮登録フォームです。「名前」の欄には、Instagram / Threads で使っている名前を入力してください。';
+view.appendChild(snsNote);
+}
+
 var form = document.createElement('form');
 form.className = 'form';
 form.noValidate = true;
@@ -98,7 +113,7 @@ form.noValidate = true;
 var realI = fieldRow(form, '本名 (必須)', inputOf('text', '', true, '例: バレー太郎'));
 realI.maxLength = 100;
 realI.autocomplete = 'name';
-var lineI = fieldRow(form, 'LINE名 (必須)', inputOf('text', '', true, 'LINE で表示される名前'));
+var lineI = fieldRow(form, snsMode ? '名前 (必須)' : 'LINE名 (必須)', inputOf('text', '', true, snsMode ? 'Instagram / Threads の名前' : 'LINE で表示される名前'));
 lineI.maxLength = 100;
 var genderSel = document.createElement('select');
 genderSel.required = true;
@@ -197,7 +212,7 @@ return;
 submit.disabled = true;
 submit.textContent = '送信中…';
 try {
-var req = { realName: realName, lineName: lineName, gender: gender, birthDate: birthDate, consent: true, age: ageVal, volleyballExperience: expI.value.trim() || null, position: (function () { var v = posChecks.filter(function (c) { return c.checked; }).map(function (c) { return c.value; }); return v.length ? v : null; })(), source: existingMode ? 'existing' : 'form' };
+var req = { realName: realName, lineName: lineName, gender: gender, birthDate: birthDate, consent: true, age: ageVal, volleyballExperience: expI.value.trim() || null, position: (function () { var v = posChecks.filter(function (c) { return c.checked; }).map(function (c) { return c.value; }); return v.length ? v : null; })(), source: existingMode ? 'existing' : (snsMode ? 'sns' : 'form') };
 if (agentMode) {
 // API キーはこのページセッション中の変数にのみ保持する
 agentApiKey = apiKeyI.value;
@@ -216,7 +231,9 @@ var p1 = document.createElement('p');
 p1.textContent = '登録申請を受け付けました。管理者が承認するまでお待ちください。';
 view.appendChild(p1);
 var p2 = document.createElement('p');
-p2.textContent = '承認されるまでメンバー一覧には表示されず、練習への申込はできません。承認されると LINE名でログインできるようになります。';
+p2.textContent = snsMode
+? 'これは仮登録です。承認されても、すぐにログインはできません。参加のご案内は運営から連絡します。'
+: '承認されるまでメンバー一覧には表示されず、練習への申込はできません。承認されると LINE名でログインできるようになります。';
 view.appendChild(p2);
 var back = document.createElement('a');
 back.className = 'btn btn-ghost';

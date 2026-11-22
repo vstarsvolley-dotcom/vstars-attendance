@@ -596,6 +596,7 @@
         route.className = 'muted';
         route.textContent = r.source === 'existing'
           ? '既存メンバー用URLからの申請（承認するとレギュラーで登録されます）'
+          : r.source === 'sns' ? 'SNSからの仮登録申請（承認しても新規のままです）'
           : r.source === 'agent' ? '代理登録の申請' : '通常フォームからの申請（旧）';
         card.appendChild(route);
         var actions = document.createElement('div');
