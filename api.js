@@ -359,6 +359,18 @@
     adminListMembers: function (query) {
       return callRpc('admin_list_members', { p_query: query || '' });
     },
+    // 監査ログ (SQL 26)。opts: {limit, offset, action, actorRole, memberNo, days}
+    adminListAuditLogs: function (opts) {
+      opts = opts || {};
+      return callRpc('admin_list_audit_logs', {
+        p_limit: opts.limit || 100,
+        p_offset: opts.offset || 0,
+        p_action: opts.action || null,
+        p_actor_role: opts.actorRole || null,
+        p_member_no: opts.memberNo || null,
+        p_days: opts.days || null
+      });
+    },
     adminCreateMember: function (m) {
       return callRpc('admin_create_member', {
         p_real_name: m.realName, p_line_name: m.lineName, p_gender: m.gender, p_birth_date: m.birthDate,

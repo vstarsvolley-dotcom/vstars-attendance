@@ -263,10 +263,83 @@
     throw new Error('invalid_period');
   }
 
+  // 監査ログ (SQL 26) のアクション名 → 日本語ラベル。
+  // 未知のアクションはそのまま返す (新しい監査対象が増えても落とさない)。
+  var AUDIT_ACTION_LABELS = {
+    add_walkin: '当日参加を追加',
+    apply_practice: '練習に申込',
+    approve_request: '登録申請を承認',
+    bootstrap_owner: 'オーナーを初期化',
+    cancel_invitation: '招待を取り消し',
+    cancel_practice: '練習を中止',
+    cancel_registration: '申込をキャンセル',
+    change_capacity: '定員を変更',
+    confirm_withdrawal: '退会を確定',
+    correct_attendance: '出欠を修正',
+    create_member: 'メンバーを作成',
+    create_practice: '練習を作成',
+    delete_announcement: 'お知らせを削除',
+    delete_member: 'メンバーを削除',
+    demote_registration: 'キャンセル待ちに戻した',
+    finalize_attendance: '出欠を確定',
+    generate_practices: '練習を一括生成',
+    grant_admin: '管理者権限を付与',
+    invite_member: 'メンバーを招待',
+    link_admin_auth: '管理者認証を連携',
+    mail_mark_result: 'メール送信の結果を記録',
+    mark_regular: '常連に設定',
+    promote_waitlist: '繰り上がり',
+    proxy_apply: '代理で申込',
+    proxy_cancel_registration: '代理で申込をキャンセル',
+    purge_rejected_request: '却下した申請を削除',
+    purge_withdrawn_member: '退会メンバーを完全削除',
+    purge_withdrawn_members: '退会メンバーを一括完全削除',
+    reject_request: '登録申請を却下',
+    reset_pin: 'PINをリセット',
+    respond_invitation: '招待に回答',
+    restore_practice: '練習を復旧',
+    retry_mail: 'メールを再送',
+    revoke_admin: '管理者権限を剥奪',
+    revoke_devices: 'デバイスを無効化',
+    save_teams: 'チーム分けを保存',
+    send_announcement: 'お知らせを送信',
+    set_attendance: '出欠を入力',
+    set_initial_pin: '初期PINを設定',
+    set_pin_name_failed: 'PIN設定の本人確認に失敗',
+    set_skill_level: 'レベルを設定',
+    update_member: 'メンバー情報を編集',
+    update_practice: '練習を編集',
+    verify_pin_failed: 'PINログインに失敗'
+  };
+
+  function auditActionLabel(action) {
+    if (!action) { return '—'; }
+    return AUDIT_ACTION_LABELS[action] || String(action);
+  }
+
+  // 監査ログの detail (jsonb) を1行テキストにする。
+  // 値が 'changed' の項目はキーだけを出す (変更された項目名の一覧として読む)。
+  // 空・null は '' を返す。
+  function auditDetailText(detail) {
+    if (!detail || typeof detail !== 'object') { return ''; }
+    var keys = Object.keys(detail);
+    if (keys.length === 0) { return ''; }
+    return keys.map(function (k) {
+      var v = detail[k];
+      if (v === 'changed') { return k; }
+      if (v === null || v === undefined) { return k + ': —'; }
+      if (typeof v === 'object') { return k + ': ' + JSON.stringify(v); }
+      return k + ': ' + String(v);
+    }).join('、');
+  }
+
   return {
     splitTeams: splitTeams,
     validateAnnouncementMessage: validateAnnouncementMessage,
     filterReminderTargets: filterReminderTargets,
-    statsPeriodRange: statsPeriodRange
+    statsPeriodRange: statsPeriodRange,
+    auditActionLabel: auditActionLabel,
+    auditDetailText: auditDetailText,
+    AUDIT_ACTION_LABELS: AUDIT_ACTION_LABELS
   };
 });

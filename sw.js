@@ -5,7 +5,7 @@
  */
 'use strict';
 
-var CACHE_NAME = 'vstars-v21';
+var CACHE_NAME = 'vstars-v22';
 var CORE_ASSETS = [
   './',
   './index.html',
@@ -28,6 +28,7 @@ var CORE_ASSETS = [
   './admin-members.js',
   './admin-attendance.js',
   './admin-reports.js',
+  './admin-logs.js',
   './registration-form.js',
   './icon-192.png',
   './icon-512.png'

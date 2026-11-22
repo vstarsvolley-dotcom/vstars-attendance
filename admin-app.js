@@ -21,7 +21,8 @@
       ['#/admin/requests', 'requests', '登録申請'],
       ['#/admin/withdrawals', 'withdrawals', '退会候補'],
       ['#/admin/attendance', 'attendance', '出席率'],
-      ['#/admin/reports', 'reports', '集計・出力']
+      ['#/admin/reports', 'reports', '集計・出力'],
+      ['#/admin/logs', 'logs', 'ログ']
     ].forEach(function (t) {
       var a = document.createElement('a');
       a.href = t[0];
@@ -103,6 +104,13 @@
         break;
       case 'reports':
         window.VstarsAdminReports.renderAdminReports();
+        break;
+      case 'logs':
+        if (window.VstarsAdminLogs && window.VstarsAdminLogs.renderAdminLogs) {
+          window.VstarsAdminLogs.renderAdminLogs();
+        } else {
+          window.location.hash = '#/admin';
+        }
         break;
       default:
         window.location.hash = '#/admin';
