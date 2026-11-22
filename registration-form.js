@@ -14,23 +14,26 @@ function viewEl() { return document.getElementById('view');}
 function Api() { return window.VstarsApi;}
 function UI() { return window.VstarsUI;}
 
+function urlText() {
+// モード判定は hash だけでなく search も見る。SNS アプリ内ブラウザ等で
+// フラグメントが ?src=... 形式に化けた場合でもモードを取りこぼさないため。
+return (window.location.search || '') + (window.location.hash || '');
+}
+
 function isAgentMode() {
-var h = window.location.hash || '';
-return h.indexOf('agent=1')!== -1;
+return urlText().indexOf('agent=1')!== -1;
 }
 
 function isExistingMode() {
 // 既存メンバー用 URL (#/register?src=existing)。LINE グループ内だけで共有し、
 // ここからの申請は承認時にレギュラーとして登録される (SQL 30)。
-var h = window.location.hash || '';
-return h.indexOf('src=existing')!== -1;
+return urlText().indexOf('src=existing')!== -1;
 }
 
 function isSnsMode() {
 // SNS 仮登録用 URL (#/register?src=sns)。Instagram / Threads で参加希望の
 // 人に渡し、本人に仮登録させる。承認しても新規のまま (SQL 31)。
-var h = window.location.hash || '';
-return h.indexOf('src=sns')!== -1;
+return urlText().indexOf('src=sns')!== -1;
 }
 
 function fieldRow(form, labelText, input) {

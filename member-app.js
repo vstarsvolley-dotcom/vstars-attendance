@@ -212,6 +212,18 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in window.navigator)) { return; }
+    // 新しい SW が制御を引き継いだら一度だけ自動リロードして最新版を表示する。
+    // これがないと、更新が来てもそのセッションは古い JS を使い続ける
+    // (例: v31 以前がキャッシュされた端末で SNS 仮登録 URL を開くと、
+    //  src=sns を知らない旧版が「受付停止」を表示してしまう)。
+    // 初回インストール時 (既存コントローラなし) はリロードしない。
+    var hadController = !!window.navigator.serviceWorker.controller;
+    var reloading = false;
+    window.navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (!hadController || reloading) { return; }
+      reloading = true;
+      window.location.reload();
+    });
     window.addEventListener('load', function () {
       window.navigator.serviceWorker.register('sw.js').catch(function () {
         // GitHub Pages のサブパス等で登録できない場合は PWA 化だけ諦める
