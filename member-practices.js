@@ -87,12 +87,128 @@
     });
   }
 
+  // 招待セクション (SQL 19): 練習一覧の最上部にも出す (マイページと同じ内容)。
+  // 回答待ち (pending) と保留中 (held) の招待だけが返る。無ければ何も出さない。
+  async function loadInvitations(wrap) {
+    var rows;
+    try {
+      rows = await Api().listMyInvitations();
+    } catch (e) {
+      return;
+    }
+    var list = Array.isArray(rows) ? rows : [];
+    if (list.length === 0) { return; }
+    var h = document.createElement('h2');
+    h.className = 'section-title';
+    h.textContent = '招待';
+    wrap.appendChild(h);
+    var lead = document.createElement('p');
+    lead.className = 'muted';
+    lead.textContent = '非公開の練習試合・大会への招待です。参加すると、この一覧から申し込めるようになります。';
+    wrap.appendChild(lead);
+    var listWrap = document.createElement('div');
+    listWrap.className = 'invitation-list';
+    list.forEach(function (inv) { listWrap.appendChild(invitationItem(inv)); });
+    wrap.appendChild(listWrap);
+  }
+
+  function invitationItem(inv) {
+    var item = document.createElement('div');
+    item.className = 'invitation-item';
+    var head = document.createElement('div');
+    head.className = 'invitation-head';
+    var dateEl = document.createElement('div');
+    dateEl.className = 'practice-date';
+    dateEl.textContent = UI().fmtDateTimeJST(inv.practice_date, inv.start_time, inv.end_time);
+    head.appendChild(dateEl);
+    var kindBadge = document.createElement('span');
+    kindBadge.className = 'badge kind-badge ' + UI().kindClass(inv.kind || 'match');
+    kindBadge.textContent = UI().kindLabel(inv.kind || 'match');
+    head.appendChild(kindBadge);
+    var privateBadge = document.createElement('span');
+    privateBadge.className = 'badge badge-private';
+    privateBadge.textContent = '非公開';
+    head.appendChild(privateBadge);
+    var statusBadge = document.createElement('span');
+    statusBadge.className = 'badge ' + (inv.status === 'held' ? 'badge-yellow' : 'badge-green');
+    statusBadge.textContent = inv.status === 'held' ? '保留中' : '承認待ち';
+    head.appendChild(statusBadge);
+    item.appendChild(head);
+
+    var venue = document.createElement('p');
+    venue.className = 'practice-venue';
+    venue.textContent = inv.venue || '';
+    item.appendChild(venue);
+    if (UI().isMatchOrTournament(inv)) {
+      var counts = document.createElement('p');
+      counts.className = 'practice-counts';
+      counts.textContent = UI().genderCountsText({
+        kind: inv.kind,
+        capacity_men: inv.capacity_men, capacity_women: inv.capacity_women,
+        confirmed_count: 0, confirmed_men: 0, confirmed_women: 0, confirmed_other: 0,
+        waitlist_count: 0
+      });
+      item.appendChild(counts);
+    }
+
+    var actions = document.createElement('div');
+    actions.className = 'invitation-actions';
+    addInvBtn(actions, '参加する', 'btn-navy', function () { respondInvitation(inv, 'accepted'); });
+    if (inv.status !== 'held') {
+      addInvBtn(actions, '保留する', 'btn-ghost', function () { respondInvitation(inv, 'held'); });
+    }
+    addInvBtn(actions, '辞退する', 'btn-cancel', async function () {
+      var ok = await UI().confirmSheet({
+        title: '招待を辞退しますか？',
+        body: '辞退すると、この練習試合・大会は見えなくなります。あとから参加するには管理者の招待し直しが必要です。',
+        okLabel: '辞退する', danger: true
+      });
+      if (ok) { respondInvitation(inv, 'declined'); }
+    });
+    item.appendChild(actions);
+    return item;
+  }
+
+  function addInvBtn(parent, label, cls, fn) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-small ' + cls;
+    btn.textContent = label;
+    btn.addEventListener('click', fn);
+    parent.appendChild(btn);
+    return btn;
+  }
+
+  async function respondInvitation(inv, response) {
+    try {
+      await Api().respondInvitation(inv.invitation_id, response);
+      if (response === 'accepted') {
+        UI().toast('参加を受け付けました。一覧から申し込めます。');
+      } else if (response === 'held') {
+        UI().toast('招待を保留にしました。あとから参加・辞退できます。');
+      } else {
+        UI().toast('招待を辞退しました。');
+      }
+      renderPractices();
+    } catch (e) {
+      UI().toast('回答できませんでした。' + UI().friendlyError(e));
+    }
+  }
+
   function drawList(view) {
     view.innerHTML = '';
     var title = document.createElement('h1');
     title.className = 'view-title';
     title.textContent = '練習一覧';
     view.appendChild(title);
+
+    // 招待は一覧の最上部 (タイトル直下)。今後タブのときだけ出す。
+    if (tab === 'upcoming') {
+      var invWrap = document.createElement('div');
+      invWrap.className = 'invitation-section';
+      view.appendChild(invWrap);
+      loadInvitations(invWrap);
+    }
 
     var lead = document.createElement('p');
     lead.className = 'view-lead';
