@@ -19,6 +19,13 @@ var h = window.location.hash || '';
 return h.indexOf('agent=1')!== -1;
 }
 
+function isExistingMode() {
+// 既存メンバー用 URL (#/register?src=existing)。LINE グループ内だけで共有し、
+// ここからの申請は承認時にレギュラーとして登録される (SQL 30)。
+var h = window.location.hash || '';
+return h.indexOf('src=existing')!== -1;
+}
+
 function fieldRow(form, labelText, input) {
 var div = document.createElement('div');
 div.className = 'field';
@@ -44,6 +51,7 @@ var view = viewEl();
 if (!view) { return;}
 view.innerHTML = '';
 var agentMode = isAgentMode();
+var existingMode = isExistingMode();
 // API キーはこのクロージャ変数にのみ保持する (保存・URL 埋め込みなし)
 var agentApiKey = '';
 
@@ -52,11 +60,35 @@ title.className = 'view-title';
 title.textContent = 'Vstars 新規登録';
 view.appendChild(title);
 
+// 通常 URL からの申請は停止した (SQL 30)。代理モードと既存メンバー用
+// URL 以外は、フォームを出さずに案内だけ表示する。
+if (!agentMode && !existingMode) {
+var closedP1 = document.createElement('p');
+closedP1.textContent = '現在、アプリからの新規登録は受け付けていません。';
+view.appendChild(closedP1);
+var closedP2 = document.createElement('p');
+closedP2.textContent = 'Vstars に参加したい方は、LINE などで運営に連絡してください。既存メンバーの方は、LINE グループで案内された専用 URL から登録してください。';
+view.appendChild(closedP2);
+var closedBack = document.createElement('a');
+closedBack.className = 'btn btn-ghost';
+closedBack.href = '#/login';
+closedBack.textContent = 'ログイン画面へ';
+view.appendChild(closedBack);
+return;
+}
+
 if (agentMode) {
 var agentNote = document.createElement('p');
 agentNote.className = 'muted';
 agentNote.textContent = '代理登録モードです。管理者が本人に代わって登録します。';
 view.appendChild(agentNote);
+}
+
+if (existingMode) {
+var existingNote = document.createElement('p');
+existingNote.className = 'muted';
+existingNote.textContent = '既存メンバー用の登録フォームです。承認されると、そのままアプリを使えるようになります。';
+view.appendChild(existingNote);
 }
 
 var form = document.createElement('form');
@@ -165,7 +197,7 @@ return;
 submit.disabled = true;
 submit.textContent = '送信中…';
 try {
-var req = { realName: realName, lineName: lineName, gender: gender, birthDate: birthDate, consent: true, age: ageVal, volleyballExperience: expI.value.trim() || null, position: (function () { var v = posChecks.filter(function (c) { return c.checked; }).map(function (c) { return c.value; }); return v.length ? v : null; })() };
+var req = { realName: realName, lineName: lineName, gender: gender, birthDate: birthDate, consent: true, age: ageVal, volleyballExperience: expI.value.trim() || null, position: (function () { var v = posChecks.filter(function (c) { return c.checked; }).map(function (c) { return c.value; }); return v.length ? v : null; })(), source: existingMode ? 'existing' : 'form' };
 if (agentMode) {
 // API キーはこのページセッション中の変数にのみ保持する
 agentApiKey = apiKeyI.value;

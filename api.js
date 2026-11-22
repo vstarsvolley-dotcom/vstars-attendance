@@ -231,7 +231,8 @@
         p_birth_date: req.birthDate, p_consent: !!req.consent,
         p_age: req.age !== undefined ? req.age : null,
         p_volleyball_experience: req.volleyballExperience || null,
-        p_position: req.position || null
+        p_position: req.position || null,
+        p_source: req.source || 'form'
       });
     },
     submitRegistrationRequestByAgent: function (apiKey, req) {

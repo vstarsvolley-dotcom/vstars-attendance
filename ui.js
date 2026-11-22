@@ -665,6 +665,8 @@
     not_found: '招待が見つかりませんでした。',
     unauthorized: 'ログインし直してください。',
     bind_limit: '短時間に何度も端末を切り替えています。しばらく待ってからもう一度お試しください。',
+    app_not_available: 'このアカウントはまだアプリを利用できません。利用開始については運営にお問い合わせください。',
+    registration_closed: '現在、アプリからの新規登録は受け付けていません。参加希望の方は運営に連絡してください。',
     invalid_device_token: '端末の認証情報が無効です。ログインし直してください。'
   };
   function friendlyError(e) {

@@ -592,12 +592,20 @@
           + (r.volleyball_position ? ' / ポジション: ' + UI().positionLabel(r.volleyball_position) : '')
           + (r.volleyball_experience ? ' / バレー歴: ' + r.volleyball_experience : '');
         card.appendChild(p);
+        var route = document.createElement('p');
+        route.className = 'muted';
+        route.textContent = r.source === 'existing'
+          ? '既存メンバー用URLからの申請（承認するとレギュラーで登録されます）'
+          : r.source === 'agent' ? '代理登録の申請' : '通常フォームからの申請（旧）';
+        card.appendChild(route);
         var actions = document.createElement('div');
         actions.className = 'practice-actions';
         addBtn(actions, '承認', 'btn-navy', async function () {
           try {
             await Api().adminApproveRequest(r.request_id);
-            UI().toast('承認しました。メンバー一覧に表示されるようになります。');
+            UI().toast(r.source === 'existing'
+              ? '承認しました。レギュラーとして登録されました。'
+              : '承認しました。メンバー一覧に表示されるようになります。');
             refresh();
           } catch (e) {
             var msg = e && e.message ? e.message : '';
