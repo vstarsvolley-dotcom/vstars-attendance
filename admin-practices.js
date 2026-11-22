@@ -530,7 +530,8 @@
     } else {
       counts.textContent = '定員: ' + (p.capacity !== undefined ? p.capacity : 18) + '人'
         + (p.confirmed_count !== undefined ? '　確定 ' + p.confirmed_count + '人' : '')
-        + (p.waitlist_count !== undefined && p.waitlist_count > 0 ? '　待ち ' + p.waitlist_count + '人' : '');
+        + (((p.waitlist_count !== undefined ? p.waitlist_count : p.waitlisted_count) || 0) > 0
+          ? '　待ち ' + (p.waitlist_count !== undefined ? p.waitlist_count : p.waitlisted_count) + '人' : '');
     }
     card.appendChild(counts);
 

@@ -253,6 +253,41 @@
     }
 
     window.addEventListener('hashchange', route);
+
+    // 人数表示が古いまま残る問題への対策 (2026-11-22):
+    // PWA をバックグラウンドから戻したとき・ブラウザの履歴復元
+    // (bfcache) では再読み込みが走らず、開いた時点の人数のままに
+    // なるため、メンバー画面では前面に戻ったタイミングで再取得する。
+    // 確認シート表示中と、管理画面 (入力フォーム保護) は対象外。
+    function sheetIsOpen() {
+      var s = document.getElementById('sheet');
+      return !!(s && !s.hidden);
+    }
+    function refreshOnResume() {
+      if (sheetIsOpen()) { return; }
+      var hash = window.location.hash || '';
+      if (hash.indexOf('#/admin') === 0 || hash.indexOf('#/login') === 0
+        || hash.indexOf('#/register') === 0) { return; }
+      route();
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') { refreshOnResume(); }
+    });
+    window.addEventListener('pageshow', function (e) {
+      if (e && e.persisted) { refreshOnResume(); }
+    });
+    // 今いる画面のナビをもう一度タップしても再取得する
+    // (同じ hash では hashchange が発火しないため)。
+    var navLinks = document.querySelectorAll('#header-nav a[data-nav]');
+    navLinks.forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        if (a.getAttribute('href') === (window.location.hash || '') && !sheetIsOpen()) {
+          e.preventDefault();
+          route();
+        }
+      });
+    });
+
     route();
   }
 

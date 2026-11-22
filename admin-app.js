@@ -28,6 +28,13 @@
       a.href = t[0];
       a.textContent = t[2];
       if (t[1] === active) { a.setAttribute('aria-current', 'page'); }
+      // 今いるタブの再タップで再取得する (同じ hash では遷移しないため)。
+      a.addEventListener('click', function (e) {
+        if (t[0] === (window.location.hash || '')) {
+          e.preventDefault();
+          renderAdmin(window.location.hash);
+        }
+      });
       nav.appendChild(a);
     });
     return nav;

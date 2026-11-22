@@ -333,11 +333,37 @@
     }).join('、');
   }
 
+  // 練習行の人数フィールドを名前の揺れを吸収して読む。
+  // DB (list_practices 等) は waitlisted_count を返すが、表示側が
+  // waitlist_count を読んでいたため待ち人数が常に 0 になっていた
+  // (2026-11-22 修正)。snake_case / camelCase の両対応で読む。
+  function practiceCounts(p) {
+    p = p || {};
+    function pick(names) {
+      for (var i = 0; i < names.length; i++) {
+        var v = p[names[i]];
+        if (v !== undefined && v !== null) {
+          var n = Number(v);
+          return isNaN(n) ? 0 : n;
+        }
+      }
+      return 0;
+    }
+    return {
+      confirmed: pick(['confirmed_count', 'confirmedCount']),
+      waitlist: pick(['waitlist_count', 'waitlisted_count', 'waitlistCount', 'waitlistedCount']),
+      men: pick(['confirmed_men', 'confirmedMen']),
+      women: pick(['confirmed_women', 'confirmedWomen']),
+      other: pick(['confirmed_other', 'confirmedOther'])
+    };
+  }
+
   return {
     splitTeams: splitTeams,
     validateAnnouncementMessage: validateAnnouncementMessage,
     filterReminderTargets: filterReminderTargets,
     statsPeriodRange: statsPeriodRange,
+    practiceCounts: practiceCounts,
     auditActionLabel: auditActionLabel,
     auditDetailText: auditDetailText,
     AUDIT_ACTION_LABELS: AUDIT_ACTION_LABELS

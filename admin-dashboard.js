@@ -153,7 +153,7 @@ var p = upcoming[i];
 var pid = p.practice_id || p.id;
 var counts = { male: 0, female: 0, other: 0, prefer_not_to_say: 0};
 var confirmed = p.confirmed_count!== undefined? p.confirmed_count: null;
-var waitlisted = p.waitlist_count!== undefined? p.waitlist_count: 0;
+var waitlisted = p.waitlist_count!== undefined? p.waitlist_count: (p.waitlisted_count || 0);
 try {
 var gc = await Api().adminPracticeGenderCounts(pid);
 var g = Array.isArray(gc)? gc[0]: gc;

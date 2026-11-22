@@ -243,21 +243,31 @@
   // その他 (other / prefer_not_to_say) がいれば「・その他 N名」を付ける。
   // 練習は従来通り「確定 n / 定員名」。
   function genderCountsText(practice) {
-    var confirmed = practice.confirmed_count !== undefined ? practice.confirmed_count
-      : (practice.confirmedCount !== undefined ? practice.confirmedCount : 0);
-    var waitlist = practice.waitlist_count !== undefined ? practice.waitlist_count
-      : (practice.waitlistCount !== undefined ? practice.waitlistCount : 0);
+    // 人数は v19-pure の practiceCounts で読む (DB の waitlisted_count と
+    // 表示側の waitlist_count の名前不一致で待ち人数が 0 になっていた)。
+    var counts = (window.V19Pure && window.V19Pure.practiceCounts)
+      ? window.V19Pure.practiceCounts(practice) : null;
+    var confirmed = counts ? counts.confirmed
+      : (practice.confirmed_count !== undefined ? practice.confirmed_count
+        : (practice.confirmedCount !== undefined ? practice.confirmedCount : 0));
+    var waitlist = counts ? counts.waitlist
+      : (practice.waitlist_count !== undefined ? practice.waitlist_count
+        : (practice.waitlisted_count !== undefined ? practice.waitlisted_count
+          : (practice.waitlistCount !== undefined ? practice.waitlistCount : 0)));
     var waitText = waitlist > 0 ? '　待ち ' + waitlist + '名' : '';
     if (!isMatchOrTournament(practice)) {
       var capacity = practice.capacity !== undefined ? practice.capacity : 18;
       return '確定 ' + confirmed + ' / ' + capacity + '名' + waitText;
     }
-    var men = practice.confirmed_men !== undefined ? practice.confirmed_men
-      : (practice.confirmedMen !== undefined ? practice.confirmedMen : 0);
-    var women = practice.confirmed_women !== undefined ? practice.confirmed_women
-      : (practice.confirmedWomen !== undefined ? practice.confirmedWomen : 0);
-    var other = practice.confirmed_other !== undefined ? practice.confirmed_other
-      : (practice.confirmedOther !== undefined ? practice.confirmedOther : 0);
+    var men = counts ? counts.men
+      : (practice.confirmed_men !== undefined ? practice.confirmed_men
+        : (practice.confirmedMen !== undefined ? practice.confirmedMen : 0));
+    var women = counts ? counts.women
+      : (practice.confirmed_women !== undefined ? practice.confirmed_women
+        : (practice.confirmedWomen !== undefined ? practice.confirmedWomen : 0));
+    var other = counts ? counts.other
+      : (practice.confirmed_other !== undefined ? practice.confirmed_other
+        : (practice.confirmedOther !== undefined ? practice.confirmedOther : 0));
     var capMen = practice.capacity_men !== undefined ? practice.capacity_men
       : (practice.capacityMen !== undefined ? practice.capacityMen : 0);
     var capWomen = practice.capacity_women !== undefined ? practice.capacity_women
