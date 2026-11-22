@@ -34,7 +34,7 @@
   }
 
   function markNav(route) {
-    var links = document.querySelectorAll('#header-nav a[data-nav]');
+    var links = document.querySelectorAll('#bottom-nav a[data-nav]');
     links.forEach(function (a) {
       if (a.getAttribute('data-nav') === route) { a.setAttribute('aria-current', 'page'); }
       else { a.removeAttribute('aria-current'); }
@@ -151,6 +151,8 @@
     var path = hash.replace(/^#/, '').split('?')[0] || '/';
     if (path === '') { path = '/'; }
     var parts = path.split('/').filter(function (s) { return s !== ''; });
+    // ログイン・登録画面では下部タブバーを出さない (v27)。
+    document.body.classList.toggle('no-tabbar', parts[0] === 'login' || parts[0] === 'register');
 
     // 管理ルートは admin-app に委譲
     if (parts[0] === 'admin') {
