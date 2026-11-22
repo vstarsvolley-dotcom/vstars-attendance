@@ -358,7 +358,7 @@
 
   // 招待 (SQL 19): 非公開の練習試合・大会への参加リクエスト。
   // 承認待ち (pending) と保留中 (held) を一覧する。無ければセクションを出さない。
-  // 参加する → そのイベントが練習一覧・カレンダーに見えるようになる。
+  // 参加する → そのまま申込まで完了する (SQL 32)。定員超過ならキャンセル待ち。
   // 保留する → 保留中のまま残り、後から参加・辞退に変更できる。
   // 辞退する → 確認の上で辞退する (見えないまま。参加するには管理者の再送が必要)。
   function renderInvitations(container) {
@@ -371,7 +371,7 @@
       container.appendChild(h);
       var lead = document.createElement('p');
       lead.className = 'muted';
-      lead.textContent = '非公開の練習試合・大会への招待です。参加すると練習一覧・カレンダーから申し込めるようになります。';
+      lead.textContent = '非公開の練習試合・大会への招待です。参加すると、そのまま申込みまで完了します。';
       container.appendChild(lead);
       var wrap = document.createElement('div');
       wrap.className = 'invitation-list';
@@ -451,9 +451,14 @@
 
   async function respond(inv, response) {
     try {
-      await Api().respondInvitation(inv.invitation_id, response);
+      var res = await Api().respondInvitation(inv.invitation_id, response);
       if (response === 'accepted') {
-        UI().toast('参加を受け付けました。練習一覧・カレンダーから申し込めます。');
+        // SQL 32: 参加する = そのまま申込完了。定員超過ならキャンセル待ち。
+        if (res && res.registration_status === 'waitlisted') {
+          UI().toast('キャンセル待ちで参加を受け付けました。');
+        } else {
+          UI().toast('参加が確定しました。');
+        }
       } else if (response === 'held') {
         UI().toast('招待を保留にしました。あとから参加・辞退できます。');
       } else {

@@ -381,6 +381,18 @@
     }
   }
 
+  // スキルレベル (管理者のみ表示)。意味を併記する (ユーザー決定 2026-11-22)。
+  function skillLevelLabel(level) {
+    switch (level) {
+      case 'S': return 'S（エース級）';
+      case 'A': return 'A（主力）';
+      case 'B': return 'B（標準）';
+      case 'C': return 'C（初級寄り）';
+      case 'D': return 'D（初心者）';
+      default: return '未設定';
+    }
+  }
+
   // 申込状態を必ずテキストで返す。色だけに依存しない。
   function statusLabel(practice) {
     if (!practice) { return '未申込'; }
@@ -703,6 +715,7 @@
     showEmpty: showEmpty,
     genderLabel: genderLabel,
     positionLabel: positionLabel,
+    skillLevelLabel: skillLevelLabel,
     teamLabel: teamLabel,
     statusLabel: statusLabel,
     statusClass: statusClass,

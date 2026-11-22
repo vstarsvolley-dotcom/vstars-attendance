@@ -111,7 +111,7 @@
     wrap.appendChild(h);
     var lead = document.createElement('p');
     lead.className = 'muted';
-    lead.textContent = '非公開の練習試合・大会への招待です。参加すると、この一覧から申し込めるようになります。';
+    lead.textContent = '非公開の練習試合・大会への招待です。参加すると、そのまま申込みまで完了します。';
     wrap.appendChild(lead);
     var listWrap = document.createElement('div');
     listWrap.className = 'invitation-list';
@@ -188,9 +188,14 @@
 
   async function respondInvitation(inv, response) {
     try {
-      await Api().respondInvitation(inv.invitation_id, response);
+      var res = await Api().respondInvitation(inv.invitation_id, response);
       if (response === 'accepted') {
-        UI().toast('参加を受け付けました。一覧から申し込めます。');
+        // SQL 32: 参加する = そのまま申込完了。定員超過ならキャンセル待ち。
+        if (res && res.registration_status === 'waitlisted') {
+          UI().toast('キャンセル待ちで参加を受け付けました。');
+        } else {
+          UI().toast('参加が確定しました。');
+        }
       } else if (response === 'held') {
         UI().toast('招待を保留にしました。あとから参加・辞退できます。');
       } else {

@@ -179,7 +179,7 @@
         levelLabel.textContent = 'レベル（管理者のみ）';
         levelRow.appendChild(levelLabel);
         var levelSel = document.createElement('select');
-        [['', '未設定'], ['S', 'S（全国）'], ['A', 'A（かなりうまい）'], ['B', 'B（うまい）'], ['C', 'C（これから）'], ['D', 'D（初心者）']].forEach(function (kv) {
+        [['', '未設定'], ['S', 'S（エース級）'], ['A', 'A（主力）'], ['B', 'B（標準）'], ['C', 'C（初級寄り）'], ['D', 'D（初心者）']].forEach(function (kv) {
           var o = document.createElement('option');
           o.value = kv[0];
           o.textContent = kv[1];
@@ -193,7 +193,7 @@
             await Api().adminSetSkillLevel(m.member_no, next);
             prevLevel = levelSel.value;
             m.skill_level = next;
-            UI().toast(next ? 'レベルを' + next + 'に設定しました。' : 'レベルを未設定にしました。');
+            UI().toast(next ? 'レベルを' + UI().skillLevelLabel(next) + 'に設定しました。' : 'レベルを未設定にしました。');
           } catch (e) {
             UI().toast('レベルの設定に失敗しました。' + UI().friendlyError(e));
             levelSel.value = prevLevel;

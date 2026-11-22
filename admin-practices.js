@@ -1011,7 +1011,7 @@
           var btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'btn btn-small ' + (selected && selected.memberNo === m.memberNo ? 'btn-navy' : 'btn-ghost');
-          btn.textContent = (m.lineName || '-') + '（' + (m.skillLevel || '未設定') + '・' + UI().positionLabel(m.position || '') + '）';
+          btn.textContent = (m.lineName || '-') + '（' + UI().skillLevelLabel(m.skillLevel) + '・' + UI().positionLabel(m.position || '') + '）';
           btn.addEventListener('click', function () {
             if (!selected) { selected = { memberNo: m.memberNo, teamNo: t.teamNo }; renderTeams(); return; }
             if (selected.memberNo === m.memberNo) { selected = null; renderTeams(); return; }
