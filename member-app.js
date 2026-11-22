@@ -287,7 +287,7 @@
     });
     // 今いる画面のナビをもう一度タップしても再取得する
     // (同じ hash では hashchange が発火しないため)。
-    var navLinks = document.querySelectorAll('#header-nav a[data-nav]');
+    var navLinks = document.querySelectorAll('#bottom-nav a[data-nav]');
     navLinks.forEach(function (a) {
       a.addEventListener('click', function (e) {
         if (a.getAttribute('href') === (window.location.hash || '') && !sheetIsOpen()) {
