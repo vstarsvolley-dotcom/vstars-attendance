@@ -41,7 +41,41 @@
     if (msg.indexOf('unauthorized') !== -1) { return 'ログインし直してください。'; }
     if (msg.indexOf('message_too_long') !== -1) { return '1000文字以内で入力してください。'; }
     if (msg.indexOf('empty_message') !== -1) { return 'メッセージを入力してください。'; }
+    if (msg.indexOf('message_not_found') !== -1) { return 'メッセージが見つかりませんでした。'; }
+    if (msg.indexOf('invalid_reaction') !== -1) { return 'そのリアクションは使えません。'; }
     return UI().friendlyError ? UI().friendlyError(e) : msg;
+  }
+
+  // リアクション (SQL 33): 絵文字6種 + バレースタンプ3種 (画像は stamps/)。
+  // DB 側の許可セットと一致させること。絵文字はコードポイントをエスケープで固定。
+  var REACTIONS = [
+    { key: '\u{1F44D}', label: 'いいね' },
+    { key: '\u2764\uFE0F', label: 'すき' },
+    { key: '\u{1F602}', label: '笑い' },
+    { key: '\u{1F62E}', label: 'すごい' },
+    { key: '\u{1F64F}', label: 'ありがとう・お願い' },
+    { key: '\u{1F3D0}', label: 'バレーボール' },
+    { key: 'stamp_nice', img: 'stamps/nice.png', label: 'ナイス！' },
+    { key: 'stamp_donmai', img: 'stamps/donmai.png', label: 'ドンマイ' },
+    { key: 'stamp_otsukare', img: 'stamps/otsukare.png', label: 'おつかれさま' }
+  ];
+  function reactionDef(key) {
+    for (var i = 0; i < REACTIONS.length; i++) {
+      if (REACTIONS[i].key === key) { return REACTIONS[i]; }
+    }
+    return { key: key, label: key };
+  }
+  function reactionContent(def) {
+    if (def.img) {
+      var img = document.createElement('img');
+      img.src = def.img;
+      img.alt = def.label || '';
+      img.className = 'chat-stamp';
+      return img;
+    }
+    var s = document.createElement('span');
+    s.textContent = def.key;
+    return s;
   }
 
   var currentClose = null;
@@ -101,10 +135,18 @@
     form.appendChild(sendBtn);
     overlay.appendChild(form);
 
+    // リアクション選択バー (選んでいる間だけ入力欄の上に表示)。
+    var picker = document.createElement('div');
+    picker.className = 'chat-picker';
+    picker.hidden = true;
+    overlay.insertBefore(picker, form);
+
     document.body.appendChild(overlay);
     document.body.style.overflow = 'hidden';
 
     var seen = new Set();
+    var rowsById = {};          // message_id -> 行要素 (リアクション更新用)
+    var pickerFor = null;       // ピッカーが対象にしている message_id
     var lastCreatedAt = null;   // 最新メッセージの created_at (ポーリング用)
     var firstCreatedAt = null;  // 最古メッセージの created_at (遡り用)
     var lastDayKey = null;
@@ -137,6 +179,83 @@
       listEl.scrollTop = listEl.scrollHeight;
     }
 
+    // --- リアクション (SQL 33) -------------------------------------------
+    REACTIONS.forEach(function (def) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chat-picker-item';
+      b.setAttribute('data-reaction', def.key);
+      b.setAttribute('aria-label', def.label);
+      b.appendChild(reactionContent(def));
+      b.addEventListener('click', function () { chooseReaction(def.key); });
+      picker.appendChild(b);
+    });
+
+    function markPickerSelection() {
+      var row = pickerFor ? rowsById[pickerFor] : null;
+      var mine = row ? row._myReaction : null;
+      Array.prototype.forEach.call(picker.children, function (b) {
+        if (b.getAttribute('data-reaction') === mine) { b.classList.add('selected'); }
+        else { b.classList.remove('selected'); }
+      });
+    }
+    function openPicker(messageId) {
+      if (pickerFor === messageId && !picker.hidden) {
+        picker.hidden = true;
+        pickerFor = null;
+        return;
+      }
+      pickerFor = messageId;
+      picker.hidden = false;
+      markPickerSelection();
+    }
+    function chooseReaction(key) {
+      var target = pickerFor;
+      picker.hidden = true;
+      pickerFor = null;
+      if (target) { doReact(target, key); }
+    }
+    async function doReact(messageId, key) {
+      if (mode === 'admin') { return; }
+      try {
+        var res = await Api().reactToPracticeMessage(messageId, key);
+        var row = rowsById[messageId];
+        if (row && res) { updateReactions(row, res); }
+      } catch (e) {
+        UI().toast('リアクションに失敗しました。' + friendlyError(e));
+      }
+    }
+    function updateReactions(row, data) {
+      var wrap = row.querySelector('.chat-reactions');
+      if (!wrap) { return; }
+      var reactions = (data && Array.isArray(data.reactions)) ? data.reactions : [];
+      var mine = data ? data.my_reaction : null;
+      var sig = JSON.stringify([reactions, mine]);
+      if (row._rsig === sig) { return; }
+      row._rsig = sig;
+      row._myReaction = mine;
+      wrap.innerHTML = '';
+      reactions.forEach(function (item) {
+        var def = reactionDef(item.reaction);
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chat-chip' + (item.reaction === mine ? ' mine' : '');
+        chip.appendChild(reactionContent(def));
+        var cnt = document.createElement('span');
+        cnt.className = 'chat-chip-count';
+        cnt.textContent = String(item.count);
+        chip.appendChild(cnt);
+        if (mode !== 'admin') {
+          chip.addEventListener('click', function () {
+            doReact(row.getAttribute('data-message-id'), item.reaction);
+          });
+        } else {
+          chip.disabled = true;
+        }
+        wrap.appendChild(chip);
+      });
+    }
+
     function renderMessage(m, prepend) {
       if (seen.has(m.message_id)) { return null; }
       seen.add(m.message_id);
@@ -155,6 +274,7 @@
       var row = document.createElement('div');
       row.className = 'chat-row' + (m.is_mine ? ' mine' : '');
       row.setAttribute('data-message-id', m.message_id);
+      rowsById[m.message_id] = row;
       if (!m.is_mine) {
         var name = document.createElement('div');
         name.className = 'chat-name';
@@ -170,6 +290,15 @@
       var time = document.createElement('span');
       time.textContent = fmtTime(m.created_at);
       meta.appendChild(time);
+      if (mode !== 'admin') {
+        var reactBtn = document.createElement('button');
+        reactBtn.type = 'button';
+        reactBtn.className = 'chat-react-btn';
+        reactBtn.textContent = '＋';
+        reactBtn.setAttribute('aria-label', 'リアクションを追加');
+        reactBtn.addEventListener('click', function () { openPicker(m.message_id); });
+        meta.appendChild(reactBtn);
+      }
       if (mode === 'admin') {
         var del = document.createElement('button');
         del.type = 'button';
@@ -193,6 +322,10 @@
         meta.appendChild(del);
       }
       row.appendChild(meta);
+      var rwrap = document.createElement('div');
+      rwrap.className = 'chat-reactions';
+      row.appendChild(rwrap);
+      updateReactions(row, m);
       frag.appendChild(row);
       anchor = row;
       if (prepend) {
@@ -236,6 +369,14 @@
       }
     }
 
+    // 表示済みメッセージのリアクションだけを最新化する (他人のリアクション反映)。
+    function refreshReactions(rows) {
+      (Array.isArray(rows) ? rows : []).forEach(function (m) {
+        var row = rowsById[m.message_id];
+        if (row) { updateReactions(row, m); }
+      });
+    }
+
     async function poll() {
       if (closed || !document.contains(overlay)) { close(); return; }
       if (document.hidden) { return; }
@@ -253,6 +394,7 @@
               if (!firstCreatedAt) { firstCreatedAt = m.created_at; }
             }
           });
+          refreshReactions(firstList);
           if (addedFirst && wasNear) { scrollBottom(); }
           return;
         }
@@ -266,6 +408,10 @@
           }
         });
         if (added && wasNear) { scrollBottom(); }
+        // 既存メッセージへのリアクションは after 取得では来ないので、
+        // 最新ページを取り直してチップだけ更新する。
+        var latest = await listFn({});
+        refreshReactions(latest);
       } catch (e) { /* ポーリング失敗は静かに無視 (次周期で再試行) */ }
     }
 

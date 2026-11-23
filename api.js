@@ -371,6 +371,13 @@
     postPracticeMessage: function (practiceId, message) {
       return callRpc('post_practice_message', { p_token: getToken(), p_practice_id: practiceId, p_message: message });
     },
+    // チャットのリアクション (SQL 33)。同じものを再送すると取り消し、
+    // reaction=null でも取り消し。{ok, message_id, reactions, my_reaction} を返す。
+    reactToPracticeMessage: function (messageId, reaction) {
+      return callRpc('react_to_practice_message', {
+        p_token: getToken(), p_message_id: messageId, p_reaction: reaction || null
+      });
+    },
     adminListPracticeMessages: function (practiceId, opts) {
       opts = opts || {};
       return callRpc('admin_list_practice_messages', {

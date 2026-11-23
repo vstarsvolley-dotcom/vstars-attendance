@@ -5,7 +5,7 @@
  */
 'use strict';
 
-var CACHE_NAME = 'vstars-v34';
+var CACHE_NAME = 'vstars-v35';
 var CORE_ASSETS = [
   './',
   './index.html',
@@ -30,6 +30,9 @@ var CORE_ASSETS = [
   './admin-reports.js',
   './admin-logs.js',
   './chat.js',
+  './stamps/nice.png',
+  './stamps/donmai.png',
+  './stamps/otsukare.png',
   './registration-form.js',
   './icon-192.png',
   './icon-512.png'

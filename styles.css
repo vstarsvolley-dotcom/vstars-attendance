@@ -509,6 +509,32 @@ table.data tr:last-child td { border-bottom: none; }
 .chat-row.mine .chat-bubble { background: var(--navy); border-color: var(--navy); color: var(--white); }
 .chat-meta { font-size: 11px; color: var(--grey); margin-top: 2px; display: flex; gap: 8px; align-items: center; }
 .chat-del { background: none; border: none; color: var(--danger); font-size: 11px; cursor: pointer; padding: 0; }
+/* リアクション (SQL 33) */
+.chat-react-btn {
+  background: var(--white); border: 1px solid var(--line); color: var(--grey);
+  font-size: 11px; cursor: pointer; padding: 0 7px; border-radius: 999px; line-height: 18px;
+}
+.chat-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.chat-reactions:empty { display: none; }
+.chat-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: var(--white); border: 1px solid var(--line);
+  border-radius: 999px; padding: 1px 7px 1px 5px; font-size: 13px; cursor: pointer;
+}
+.chat-chip.mine { border-color: var(--navy); background: #E3EAF6; }
+.chat-chip .chat-stamp { width: 20px; height: 20px; border-radius: 5px; display: block; }
+.chat-chip-count { font-size: 11px; color: var(--ink); }
+.chat-picker {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 8px 12px; background: var(--white); border-top: 1px solid var(--line);
+}
+.chat-picker[hidden] { display: none; }
+.chat-picker-item {
+  background: none; border: 1px solid var(--line); border-radius: 10px;
+  padding: 4px 8px; font-size: 20px; cursor: pointer; line-height: 1.2;
+}
+.chat-picker-item.selected { border-color: var(--navy); background: #E3EAF6; }
+.chat-picker-item .chat-stamp { width: 36px; height: 36px; border-radius: 7px; display: block; }
 .chat-composer {
   display: flex; gap: 8px; padding: 10px 12px;
   background: var(--white); border-top: 1px solid var(--line);
