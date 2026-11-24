@@ -1313,34 +1313,247 @@
     input.focus();
   }
 
+  // 代理申込 (一括): チェックしたメンバー全員を、同じ理由でまとめて申し込む。
+  // 既存 RPC admin_proxy_apply を1人ずつ順番に呼ぶ (SQL 変更なし)。
+  // 理由は任意 (オーナー指示)。未入力なら proxy_reason は NULL で渡す。
+  // この練習に申込済み (確定・キャンセル待ち) のメンバーは選択できない。
   function proxyApplyForm(p, detail, wrap) {
     detail.innerHTML = '';
     var form = document.createElement('form');
     form.className = 'form';
-    var sel = document.createElement('select');
-    sel.required = true;
-    fieldRow(form, 'メンバー', sel);
-    fillMemberSelect(sel);
-    var reason = fieldRow(form, '理由（必須）', inputOf('text', '', true));
+    form.noValidate = true;
+
+    var search = fieldRow(form, 'メンバー検索', inputOf('text', '', false));
+    search.placeholder = '名前で絞り込み';
+
+    var copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn btn-ghost btn-small';
+    copyBtn.textContent = '前回の参加者をチェック';
+    form.appendChild(copyBtn);
+
+    var listBox = document.createElement('div');
+    listBox.style.display = 'flex';
+    listBox.style.flexDirection = 'column';
+    listBox.style.gap = '8px';
+    listBox.style.maxHeight = '320px';
+    listBox.style.overflowY = 'auto';
+    listBox.style.margin = '8px 0';
+    var loading = document.createElement('p');
+    loading.className = 'muted';
+    loading.textContent = '読み込み中…';
+    listBox.appendChild(loading);
+    form.appendChild(listBox);
+
+    var reason = fieldRow(form, '理由（任意）', inputOf('text', '', false));
     reason.placeholder = '例: 本人の代わりに電話で申込';
     reason.maxLength = 200;
+
     var submit = document.createElement('button');
     submit.type = 'submit';
     submit.className = 'btn btn-navy';
-    submit.textContent = '代理で申し込む';
+    submit.textContent = '0人を代理申込する';
+    submit.disabled = true;
     form.appendChild(submit);
+
+    var resultBox = document.createElement('div');
+    form.appendChild(resultBox);
+
+    detail.appendChild(form);
+
+    var memberRows = []; // {memberNo, name, realName, rowEl, checkEl, applied}
+    var busy = false;
+
+    function refreshSubmit() {
+      var n = 0;
+      memberRows.forEach(function (r) { if (r.checkEl && r.checkEl.checked) { n++; } });
+      submit.textContent = n + '人を代理申込する';
+      submit.disabled = busy || n === 0;
+    }
+
+    // メンバー一覧と、この練習の名簿 (申込済みの判定用) を読み込む。
+    // 名簿 RPC は確定・キャンセル待ちのみ返すため、載っている人が申込済み。
+    Promise.all([
+      Api().adminListMembers('').catch(function () { return null; }),
+      Api().adminGetPracticeRoster(pid(p)).catch(function () { return []; })
+    ]).then(function (results) {
+      listBox.innerHTML = '';
+      if (!Array.isArray(results[0])) {
+        var err = document.createElement('p');
+        err.className = 'danger-text';
+        err.textContent = 'メンバー名簿を取得できませんでした。';
+        listBox.appendChild(err);
+        return;
+      }
+      var applied = {};
+      (Array.isArray(results[1]) ? results[1] : []).forEach(function (r) {
+        if (r && r.member_no !== undefined && r.member_no !== null) {
+          applied[r.member_no] = r.status;
+        }
+      });
+      var members = results[0].filter(function (m) {
+        return m && m.status !== 'withdrawn' && !m.is_withdrawn;
+      });
+      members.sort(function (a, b) {
+        var na = a.member_no !== undefined ? a.member_no : a.memberNo;
+        var nb = b.member_no !== undefined ? b.member_no : b.memberNo;
+        return (na || 0) - (nb || 0);
+      });
+      if (members.length === 0) {
+        var none = document.createElement('p');
+        none.className = 'muted';
+        none.textContent = 'メンバーがいません。';
+        listBox.appendChild(none);
+        return;
+      }
+      members.forEach(function (m) {
+        var no = m.member_no !== undefined ? m.member_no : m.memberNo;
+        var isApplied = applied[no] !== undefined;
+        var row = document.createElement('label');
+        row.className = 'checkbox-item';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = String(no);
+        if (isApplied) { cb.disabled = true; }
+        var text = document.createElement('span');
+        text.textContent = (m.line_name || m.lineName || '') + ' (No.' + no + ')'
+          + ' ・ ' + UI().genderLabel(m.gender)
+          + (isApplied ? ' ・ 申込済み' + (applied[no] === 'confirmed' ? '（確定）' : '（キャンセル待ち）') : '');
+        row.appendChild(cb);
+        row.appendChild(text);
+        listBox.appendChild(row);
+        memberRows.push({
+          memberNo: no,
+          name: m.line_name || m.lineName || ('No.' + no),
+          realName: m.real_name || '',
+          rowEl: row,
+          checkEl: cb,
+          applied: isApplied
+        });
+        cb.addEventListener('change', refreshSubmit);
+      });
+      refreshSubmit();
+    });
+
+    search.addEventListener('input', function () {
+      var q = search.value.trim();
+      memberRows.forEach(function (r) {
+        var hit = !q || r.name.indexOf(q) !== -1 || r.realName.indexOf(q) !== -1
+          || String(r.memberNo) === q;
+        r.rowEl.style.display = hit ? '' : 'none';
+      });
+    });
+
+    // 同じ種別で、自分より前の日付の直近の開催 (中止を除く) の確定者を
+    // まとめてチェックする。既に申込済みの人は対象外。
+    copyBtn.addEventListener('click', async function () {
+      if (busy) { return; }
+      copyBtn.disabled = true;
+      try {
+        var practices = await Api().adminListPractices();
+        var myDate = String(p.practice_date || '').slice(0, 10);
+        var myKind = p.kind || 'practice';
+        var prev = (Array.isArray(practices) ? practices : []).filter(function (q) {
+          var d = String(q && q.practice_date || '').slice(0, 10);
+          return q && pid(q) !== pid(p) && !q.is_cancelled
+            && (q.kind || 'practice') === myKind && d !== '' && d < myDate;
+        }).sort(function (a, b) {
+          var ka = String(a.practice_date) + ' ' + (a.start_time || '');
+          var kb = String(b.practice_date) + ' ' + (b.start_time || '');
+          return ka < kb ? 1 : ka > kb ? -1 : 0;
+        })[0];
+        if (!prev) {
+          UI().toast('前回の' + UI().kindLabel(myKind) + 'が見つかりませんでした。');
+          return;
+        }
+        var roster = await Api().adminGetPracticeRoster(pid(prev));
+        var confirmedNos = {};
+        (Array.isArray(roster) ? roster : []).forEach(function (r) {
+          if (r && r.status === 'confirmed' && r.member_no !== undefined && r.member_no !== null) {
+            confirmedNos[r.member_no] = true;
+          }
+        });
+        var checkedCount = 0;
+        memberRows.forEach(function (r) {
+          if (!r.applied && confirmedNos[r.memberNo]) {
+            if (!r.checkEl.checked) { checkedCount++; }
+            r.checkEl.checked = true;
+          }
+        });
+        refreshSubmit();
+        UI().toast('前回（' + UI().fmtDateJST(prev.practice_date) + '）の参加者 ' + checkedCount + '人をチェックしました。');
+      } catch (e) {
+        UI().toast('前回の参加者を取得できませんでした。' + UI().friendlyError(e));
+      }
+      copyBtn.disabled = false;
+    });
+
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
-      // fillMemberSelect は非同期。読み込み前/空のまま送信されると
-      // native required が無言で止めるため、JS で明示する。
-      if (!sel.value) { UI().toast('メンバーを選択してください。'); return; }
-      try {
-        await Api().adminProxyApply(pid(p), parseInt(sel.value, 10), reason.value.trim());
-        UI().toast('代理申込しました。');
+      if (busy) { return; }
+      var targets = memberRows.filter(function (r) {
+        return r.checkEl && r.checkEl.checked && !r.applied;
+      });
+      if (targets.length === 0) { UI().toast('メンバーを選択してください。'); return; }
+      var reasonVal = reason.value.trim();
+      busy = true;
+      submit.disabled = true;
+      copyBtn.disabled = true;
+      search.disabled = true;
+      reason.disabled = true;
+      memberRows.forEach(function (r) { r.checkEl.disabled = true; });
+      resultBox.innerHTML = '';
+      var progress = document.createElement('p');
+      progress.className = 'muted';
+      resultBox.appendChild(progress);
+
+      // 並列にせず1人ずつ順番に処理する (定員の確定/待ち判定が順序依存のため)。
+      var confirmed = 0;
+      var waitlisted = 0;
+      var skipped = 0;
+      var failures = [];
+      for (var i = 0; i < targets.length; i++) {
+        var t = targets[i];
+        progress.textContent = '処理中… ' + (i + 1) + ' / ' + targets.length + '人（' + t.name + '）';
+        try {
+          var res = await Api().adminProxyApply(pid(p), t.memberNo, reasonVal === '' ? null : reasonVal);
+          if (res && res.status === 'confirmed') { confirmed++; }
+          else if (res && res.status === 'waitlisted') { waitlisted++; }
+          else { failures.push({ name: t.name, message: '結果を確認できませんでした。' }); }
+        } catch (ex) {
+          // 送信直前に本人が申し込んだ等で既に申込済みなら、失敗ではなくスキップ扱い。
+          if (ex && ex.message && ex.message.indexOf('already_registered') !== -1) { skipped++; }
+          else { failures.push({ name: t.name, message: UI().friendlyError(ex) }); }
+        }
+      }
+      busy = false;
+      var summary = '確定 ' + confirmed + '人 / キャンセル待ち ' + waitlisted + '人'
+        + ' / 申込済みでスキップ ' + skipped + '人 / 失敗 ' + failures.length + '人';
+      if (failures.length === 0) {
+        UI().toast('代理申込しました。' + summary);
         renderAdminPractices();
-      } catch (ex) { UI().toast('代理申込に失敗しました。' + UI().friendlyError(ex)); }
+        return;
+      }
+      // 失敗がある場合は結果をフォーム内に残し、「閉じる」で再描画する。
+      resultBox.innerHTML = '';
+      var sumEl = document.createElement('p');
+      sumEl.textContent = summary;
+      resultBox.appendChild(sumEl);
+      var ul = document.createElement('ul');
+      failures.forEach(function (f) {
+        var li = document.createElement('li');
+        li.className = 'danger-text';
+        li.textContent = f.name + ': ' + f.message;
+        ul.appendChild(li);
+      });
+      resultBox.appendChild(ul);
+      var closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'btn btn-navy';
+      closeBtn.textContent = '閉じる';
+      closeBtn.addEventListener('click', function () { renderAdminPractices(); });
+      resultBox.appendChild(closeBtn);
     });
-    detail.appendChild(form);
   }
 
   function walkinForm(p, detail, wrap) {

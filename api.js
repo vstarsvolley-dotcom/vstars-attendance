@@ -308,8 +308,10 @@
       return callRpc('admin_list_invitations', { p_practice_id: practiceId });
     },
     adminProxyApply: function (practiceId, memberNo, reason) {
+      // 理由は任意 (オーナー指示)。未入力は '' ではなく NULL で渡す
+      // (registrations.proxy_reason は nullable)。
       return callRpc('admin_proxy_apply', {
-        p_practice_id: practiceId, p_member_no: memberNo, p_reason: reason || ''
+        p_practice_id: practiceId, p_member_no: memberNo, p_reason: reason || null
       });
     },
     adminProxyCancel: function (registrationId, reason) {

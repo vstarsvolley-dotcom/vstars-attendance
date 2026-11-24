@@ -5,7 +5,7 @@
  */
 'use strict';
 
-var CACHE_NAME = 'vstars-v36';
+var CACHE_NAME = 'vstars-v37';
 var CORE_ASSETS = [
   './',
   './index.html',
