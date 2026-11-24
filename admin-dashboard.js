@@ -150,6 +150,48 @@ listWrap.innerHTML = '<p class="danger-text">お知らせを取得できませ�
 async function loadDashboard(wrap) {
 wrap.innerHTML = '';
 
+// --- メンバー構成 (人数・男女比) ---
+var compSec = section('メンバー構成');
+var compBody = document.createElement('div');
+compBody.innerHTML = '<p>読み込み中…</p>';
+compSec.appendChild(compBody);
+wrap.appendChild(compSec);
+try {
+var compMembers = await Api().adminListMembers('');
+var compActive = (Array.isArray(compMembers)? compMembers: []).filter(function (m) { return !m.status || m.status === 'active'; });
+var compTotal = compActive.length;
+var compMale = 0;
+var compFemale = 0;
+var compOther = 0;
+var compRegular = 0;
+compActive.forEach(function (m) {
+if (m.gender === 'male') { compMale++; }
+else if (m.gender === 'female') { compFemale++; }
+else { compOther++; }
+if (m.regular_since) { compRegular++; }
+});
+var compPct = function (n) { return compTotal > 0? String(Math.round(n * 100 / compTotal)) + '%': '—'; };
+var compGrid = document.createElement('div');
+compGrid.className = 'stat-grid';
+var compCard1 = document.createElement('div');
+compCard1.className = 'stat-card';
+compCard1.innerHTML = '<p class="stat-label">在籍メンバー</p>'
++ '<p class="stat-value">' + compTotal + '人</p>'
++ '<p class="stat-sub">男性 ' + compMale + '人（' + compPct(compMale) + '） / 女性 ' + compFemale + '人（' + compPct(compFemale) + '）'
++ (compOther > 0? ' / その他・未設定 ' + compOther + '人（' + compPct(compOther) + '）': '') + '</p>';
+compGrid.appendChild(compCard1);
+var compCard2 = document.createElement('div');
+compCard2.className = 'stat-card';
+compCard2.innerHTML = '<p class="stat-label">会員区分</p>'
++ '<p class="stat-value">既存 ' + compRegular + '人</p>'
++ '<p class="stat-sub">新規 ' + (compTotal - compRegular) + '人</p>';
+compGrid.appendChild(compCard2);
+compBody.innerHTML = '';
+compBody.appendChild(compGrid);
+} catch (e) {
+compBody.innerHTML = '<p>メンバー構成を取得できませんでした。</p>';
+}
+
 // --- 未通知一覧 ---
 var unSec = section('未通知の繰り上がり・待ち戻し');
 var unBody = document.createElement('div');

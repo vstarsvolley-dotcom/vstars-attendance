@@ -132,6 +132,23 @@
         return;
       }
       members = Array.isArray(members) ? members : [];
+      // 参加回数・最終参加日 (SQL 34)。取れなくても一覧自体は出す。
+      var activityByNo = {};
+      try {
+        var acts = await Api().adminMemberActivity();
+        (Array.isArray(acts) ? acts : []).forEach(function (a) {
+          if (a && a.member_no !== undefined && a.member_no !== null) {
+            activityByNo[a.member_no] = a;
+          }
+        });
+      } catch (e) { /* 参加回数なしで続行 */ }
+      function activityText(m) {
+        var a = activityByNo[m.member_no];
+        if (!a) { return ''; }
+        var cnt = a.attended_count !== undefined && a.attended_count !== null ? Number(a.attended_count) : 0;
+        return ' ｜ 参加: ' + cnt + '回 ｜ 最終参加: '
+          + (a.last_attended_date ? UI().fmtDateJST(a.last_attended_date) : '参加記録なし');
+      }
       // 退会済みの絞り込み (既定は現役のみ)。隠れた退会済みの件数を注記する。
       var wf = filterSel.value;
       var shown = members.filter(function (m) {
@@ -170,7 +187,8 @@
           + (m.age !== undefined && m.age !== null ? ' ｜ 年齢: ' + m.age + '歳' : '')
           + (m.volleyball_position ? ' ｜ ポジション: ' + UI().positionLabel(m.volleyball_position) : '')
           + (m.volleyball_experience ? ' ｜ バレー歴: ' + m.volleyball_experience : '')
-          + (m.line_group_joined_date ? ' ｜ LINEグループ参加: ' + UI().fmtDateJST(m.line_group_joined_date) : '');
+          + (m.line_group_joined_date ? ' ｜ LINEグループ参加: ' + UI().fmtDateJST(m.line_group_joined_date) : '')
+          + activityText(m);
         card.appendChild(p);
         // v18: レベル設定 (管理者のみ。会員には見せない隠し項目)。
         var levelRow = document.createElement('div');

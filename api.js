@@ -355,6 +355,8 @@
     },
     adminMemberStats: function () { return callRpc('admin_member_stats', {}); },
     adminMemberStatsRange: function (from, to) { return callRpc('admin_member_stats_range', { p_from: from || null, p_to: to || null }); },
+    // メンバー別の参加回数・最終参加日 (SQL 34)。メンバー一覧の見える化用。
+    adminMemberActivity: function () { return callRpc('admin_member_activity', {}); },
     // 明日のリマインドを手動送信。{ok, practices, reminded} を返す。
     adminSendReminders: function () { return callRpc('admin_send_reminders', {}); },
     adminListMembers: function (query) {
