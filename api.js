@@ -195,6 +195,8 @@
       return callRpc('ack_status_change', { p_token: getToken(), p_registration_id: registrationId });
     },
     getMyPage: function () { return callRpc('get_my_page', { p_token: getToken() }); },
+    // 自分が管理者か (SQL 35)。下部タブバーの「管理」タブの出し分け専用。
+    getMyAdminFlag: function () { return callRpc('get_my_admin_flag', { p_token: getToken() }); },
     savePushSubscription: function (endpoint, p256dh, auth) {
       return callRpc('member_save_push_subscription', {
         p_token: getToken(), p_endpoint: endpoint, p_p256dh: p256dh,

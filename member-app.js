@@ -67,6 +67,44 @@
     }
   }
 
+  // 下部タブバーの「管理」タブは管理者メンバーにだけ出す (SQL 35)。
+  // 判定はトークンごとに1回だけ取得してキャッシュする。未ログイン・
+  // 取得前・取得失敗時は非表示のまま (fail-closed)。index.html 側でも
+  // 初期状態は hidden にしてある。
+  var adminFlagCache = { token: null, value: false, pending: false };
+
+  function setAdminTabVisible(visible) {
+    var a = document.querySelector('#bottom-nav a[data-nav="admin"]');
+    if (a) { a.hidden = !visible; }
+  }
+
+  function refreshAdminTab() {
+    var api = getApi();
+    if (!isLoggedIn() || !api || !api.getMyAdminFlag) {
+      // ログアウト時もここを通る: キャッシュを捨てて再び隠す。
+      adminFlagCache = { token: null, value: false, pending: false };
+      setAdminTabVisible(false);
+      return;
+    }
+    var token = api.getToken();
+    if (adminFlagCache.token === token) {
+      setAdminTabVisible(adminFlagCache.value);
+      return;
+    }
+    adminFlagCache = { token: token, value: false, pending: true };
+    setAdminTabVisible(false);
+    api.getMyAdminFlag().then(function (flag) {
+      if (adminFlagCache.token !== token) { return; }
+      adminFlagCache.value = !!flag;
+      adminFlagCache.pending = false;
+      setAdminTabVisible(adminFlagCache.value);
+    }).catch(function () {
+      if (adminFlagCache.token !== token) { return; }
+      adminFlagCache.pending = false;
+      setAdminTabVisible(false);
+    });
+  }
+
   function normalizeNotice(n) {
     return {
       registrationId: n.registration_id || n.registrationId || null,
@@ -153,6 +191,9 @@
     var parts = path.split('/').filter(function (s) { return s !== ''; });
     // ログイン・登録画面では下部タブバーを出さない (v27)。
     document.body.classList.toggle('no-tabbar', parts[0] === 'login' || parts[0] === 'register');
+    // 「管理」タブの出し分け (管理者メンバーのみ)。判定はキャッシュされ、
+    // ルート遷移のたびに RPC は叩かない。
+    refreshAdminTab();
 
     // 管理ルートは admin-app に委譲
     if (parts[0] === 'admin') {
