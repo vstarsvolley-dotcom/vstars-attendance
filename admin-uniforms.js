@@ -102,11 +102,11 @@
     // --- 新規追加 ---
     var addWrap = document.createElement('div');
     view.appendChild(addWrap);
-    var addBtn = addBtn(addWrap, '＋ ユニフォームを追加', 'btn-navy', function () {
+    var addButton = addBtn(addWrap, '＋ ユニフォームを追加', 'btn-navy', function () {
       addWrap.innerHTML = '';
       addWrap.appendChild(buildForm(null));
     });
-    addBtn.className = 'btn btn-navy';
+    addButton.className = 'btn btn-navy';
 
     var listWrap = document.createElement('div');
     listWrap.style.marginTop = '16px';
