@@ -397,6 +397,76 @@
     adminDeletePracticeMessage: function (messageId) {
       return callRpc('admin_delete_practice_message', { p_message_id: messageId });
     },
+    // チャット改修 (SQL 37): リアクション明細 + 添付ファイル。
+    listMessageReactions: function (messageId) {
+      return callRpc('list_message_reactions', {
+        p_token: getToken(), p_message_id: messageId
+      });
+    },
+    adminListMessageReactions: function (messageId) {
+      return callRpc('admin_list_message_reactions', { p_message_id: messageId });
+    },
+    postPracticeMessageAttachment: function (practiceId, message, att) {
+      return callRpc('post_practice_message_attachment', {
+        p_token: getToken(), p_practice_id: practiceId, p_message: message || '',
+        p_attachment_path: att ? att.path : null,
+        p_attachment_name: att ? att.name : null,
+        p_attachment_mime: att ? att.mime : null,
+        p_attachment_size: att ? att.size : null
+      });
+    },
+    adminPostPracticeMessageAttachment: function (practiceId, message, att) {
+      return callRpc('admin_post_practice_message_attachment', {
+        p_practice_id: practiceId, p_message: message || '',
+        p_attachment_path: att ? att.path : null,
+        p_attachment_name: att ? att.name : null,
+        p_attachment_mime: att ? att.mime : null,
+        p_attachment_size: att ? att.size : null
+      });
+    },
+    // Edge Function chat-attachment への fetch (メンバー=端末トークン、
+    // 管理者=Auth セッション)。mode: 'member' | 'admin'。
+    chatAttachmentFetch: async function (mode, suffix, options) {
+      var headers = { 'apikey': config.SUPABASE_ANON_KEY };
+      if (mode === 'admin') {
+        var sb = getClient();
+        var sessionRes = await sb.auth.getSession();
+        var session = sessionRes && sessionRes.data ? sessionRes.data.session : null;
+        var token = session ? session.access_token : null;
+        if (!token) { throw new Error('管理者としてログインし直してください。'); }
+        headers['Authorization'] = 'Bearer ' + token;
+      } else {
+        headers['Authorization'] = 'Bearer ' + config.SUPABASE_ANON_KEY;
+        headers['x-member-token'] = getToken();
+      }
+      if (options && options.headers) {
+        Object.keys(options.headers).forEach(function (k) { headers[k] = options.headers[k]; });
+      }
+      var res = await fetch(config.SUPABASE_URL + '/functions/v1/chat-attachment' + suffix, {
+        method: 'POST',
+        headers: headers,
+        body: options ? options.body : undefined
+      });
+      var data = null;
+      try { data = await res.json(); } catch (e) {}
+      if (!res.ok) {
+        var code = (data && data.error) ? data.error : ('http_' + res.status);
+        throw new Error(code);
+      }
+      return data;
+    },
+    uploadChatAttachment: function (mode, practiceId, blob, name) {
+      var fd = new FormData();
+      fd.append('practice_id', practiceId);
+      fd.append('file', blob, name || 'ファイル');
+      return this.chatAttachmentFetch(mode, '/upload', { body: fd });
+    },
+    getChatAttachmentUrl: function (mode, messageId) {
+      return this.chatAttachmentFetch(mode, '/url', {
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message_id: messageId })
+      });
+    },
     // 運営からのお知らせ欄 (SQL 28)。プッシュなし・アプリ内表示のみ。
     listNotices: function () { return callRpc('list_notices', { p_token: getToken() }); },
     adminListNotices: function () { return callRpc('admin_list_notices', {}); },

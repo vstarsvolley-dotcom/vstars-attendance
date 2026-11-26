@@ -208,6 +208,31 @@
     return { ok: true, length: t.length };
   }
 
+  // チャット添付 (SQL 37): 許可 MIME と上限サイズは SQL / Edge Function と一致。
+  var CHAT_ATTACHMENT_MAX = 10485760; // 10MB
+  var CHAT_ATTACHMENT_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+  function attachmentKind(mime) {
+    if (!mime) { return null; }
+    if (mime === 'application/pdf') { return 'pdf'; }
+    if (String(mime).indexOf('image/') === 0) { return 'image'; }
+    return null;
+  }
+  function validateAttachment(mime, size) {
+    if (CHAT_ATTACHMENT_MIMES.indexOf(mime) === -1) {
+      return { ok: false, error: 'unsupported_file_type' };
+    }
+    if (!size || size < 1 || size > CHAT_ATTACHMENT_MAX) {
+      return { ok: false, error: 'file_too_large' };
+    }
+    return { ok: true };
+  }
+  function formatFileSize(bytes) {
+    var n = Number(bytes) || 0;
+    if (n < 1024) { return n + ' B'; }
+    if (n < 1024 * 1024) { return Math.round(n / 1024) + ' KB'; }
+    return (Math.round(n / (1024 * 1024) * 10) / 10) + ' MB';
+  }
+
   // 前日リマインドの対象抽出 (純粋関数)。
   // practices: [{id, practiceDate, status}]
   // registrations: [{practiceId, memberId, status}]
@@ -438,6 +463,9 @@
     splitTeams: splitTeams,
     validateAnnouncementMessage: validateAnnouncementMessage,
     validateChatMessage: validateChatMessage,
+    attachmentKind: attachmentKind,
+    validateAttachment: validateAttachment,
+    formatFileSize: formatFileSize,
     filterReminderTargets: filterReminderTargets,
     statsPeriodRange: statsPeriodRange,
     practiceCounts: practiceCounts,

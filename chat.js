@@ -43,6 +43,11 @@
     if (msg.indexOf('empty_message') !== -1) { return 'メッセージを入力してください。'; }
     if (msg.indexOf('message_not_found') !== -1) { return 'メッセージが見つかりませんでした。'; }
     if (msg.indexOf('invalid_reaction') !== -1) { return 'そのリアクションは使えません。'; }
+    if (msg.indexOf('unsupported_file_type') !== -1) { return '送れるのは画像（JPG・PNGなど）とPDFだけです。'; }
+    if (msg.indexOf('file_too_large') !== -1) { return 'ファイルは10MBまでです。'; }
+    if (msg.indexOf('invalid_attachment') !== -1) { return 'ファイルの送信に失敗しました。もう一度お試しください。'; }
+    if (msg.indexOf('attachment_expired') !== -1) { return '保存期間（1か月）を過ぎたため削除されました。'; }
+    if (msg.indexOf('upload_failed') !== -1) { return 'アップロードに失敗しました。通信環境を確認してもう一度お試しください。'; }
     return UI().friendlyError ? UI().friendlyError(e) : msg;
   }
 
@@ -120,8 +125,25 @@
     listEl.className = 'chat-messages';
     overlay.appendChild(listEl);
 
+    // 添付ファイルのプレビュー帯 (選んでいる間だけコンポーザーの上に表示)。
+    var fileBar = document.createElement('div');
+    fileBar.className = 'chat-filebar';
+    fileBar.hidden = true;
+    overlay.appendChild(fileBar);
+
     var form = document.createElement('form');
     form.className = 'chat-composer';
+    var attachBtn = document.createElement('button');
+    attachBtn.type = 'button';
+    attachBtn.className = 'chat-attach-btn';
+    attachBtn.textContent = '📎';
+    attachBtn.setAttribute('aria-label', 'ファイルを添付（画像・PDF）');
+    form.appendChild(attachBtn);
+    var fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*,application/pdf,.pdf';
+    fileInput.hidden = true;
+    form.appendChild(fileInput);
     var ta = document.createElement('textarea');
     ta.className = 'chat-input';
     ta.rows = 2;
@@ -152,6 +174,9 @@
     var lastDayKey = null;
     var timer = null;
     var closed = false;
+    var pendingFile = null;     // 送信待ちの添付ファイル (File)
+    var attUrlCache = {};       // message_id -> Promise<string> (署名URL)
+    var lastLongPressAt = 0;    // 長押し直後の click を抑止するため
 
     function close() {
       if (closed) { return; }
@@ -245,15 +270,254 @@
         cnt.className = 'chat-chip-count';
         cnt.textContent = String(item.count);
         chip.appendChild(cnt);
-        if (mode !== 'admin') {
-          chip.addEventListener('click', function () {
+        // タップ: メンバーはリアクション付け替え (従来通り)、管理者は明細。
+        // 長押し: どちらのモードでも「誰が押したか」を表示する。
+        chip.addEventListener('click', function () {
+          if (Date.now() - lastLongPressAt < 600) { return; }
+          if (mode !== 'admin') {
             doReact(row.getAttribute('data-message-id'), item.reaction);
-          });
-        } else {
-          chip.disabled = true;
-        }
+          } else {
+            openWhoSheet(row.getAttribute('data-message-id'));
+          }
+        });
+        attachLongPress(chip, function () {
+          openWhoSheet(row.getAttribute('data-message-id'));
+        });
         wrap.appendChild(chip);
       });
+    }
+
+    // --- 添付ファイル (SQL 37) ------------------------------------------
+    function clearPendingFile() {
+      pendingFile = null;
+      fileBar.hidden = true;
+      fileBar.innerHTML = '';
+      fileInput.value = '';
+    }
+    function setPendingFile(file) {
+      if (!file) { return; }
+      var pure = window.V19Pure || {};
+      if (pure.validateAttachment) {
+        var chk = pure.validateAttachment(file.type, file.size);
+        if (!chk.ok) {
+          UI().toast(friendlyError(new Error(chk.error)));
+          return;
+        }
+      }
+      pendingFile = file;
+      fileBar.innerHTML = '';
+      var label = document.createElement('span');
+      label.className = 'chat-filebar-name';
+      label.textContent = '📎 ' + file.name + (pure.formatFileSize ? '（' + pure.formatFileSize(file.size) + '）' : '');
+      fileBar.appendChild(label);
+      var clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'btn btn-ghost btn-small';
+      clearBtn.textContent = '✕ 外す';
+      clearBtn.addEventListener('click', clearPendingFile);
+      fileBar.appendChild(clearBtn);
+      fileBar.hidden = false;
+    }
+    attachBtn.addEventListener('click', function () { fileInput.click(); });
+    fileInput.addEventListener('change', function () {
+      if (fileInput.files && fileInput.files[0]) { setPendingFile(fileInput.files[0]); }
+      fileInput.value = '';
+    });
+
+    // 画像は長辺1600px・JPEG 0.82 に圧縮してから送る (GIFはそのまま)。
+    function prepareUpload(file) {
+      var name = file.name || 'ファイル';
+      if (!file.type || file.type.indexOf('image/') !== 0 || file.type === 'image/gif') {
+        return Promise.resolve({ blob: file, name: name });
+      }
+      return new Promise(function (resolve) {
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function () {
+          try {
+            var scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+            var canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            URL.revokeObjectURL(url);
+            canvas.toBlob(function (blob) {
+              if (blob) {
+                resolve({ blob: blob, name: name.replace(/\.[^.]*$/, '') + '.jpg' });
+              } else {
+                resolve({ blob: file, name: name });
+              }
+            }, 'image/jpeg', 0.82);
+          } catch (e) {
+            URL.revokeObjectURL(url);
+            resolve({ blob: file, name: name });
+          }
+        };
+        img.onerror = function () {
+          URL.revokeObjectURL(url);
+          resolve({ blob: file, name: name });
+        };
+        img.src = url;
+      });
+    }
+
+    function attachmentUrl(messageId) {
+      if (!attUrlCache[messageId]) {
+        attUrlCache[messageId] = Api().getChatAttachmentUrl(mode, messageId)
+          .then(function (r) { return r.url; });
+        // 失敗時はキャッシュを消して次回再試行できるようにする。
+        attUrlCache[messageId].catch(function () { delete attUrlCache[messageId]; });
+      }
+      return attUrlCache[messageId];
+    }
+
+    function openImageViewer(url) {
+      var viewer = document.createElement('div');
+      viewer.className = 'chat-img-viewer';
+      var img = document.createElement('img');
+      img.src = url;
+      img.alt = '添付画像';
+      viewer.appendChild(img);
+      var hint = document.createElement('div');
+      hint.className = 'chat-img-viewer-hint';
+      hint.textContent = 'タップで閉じる';
+      viewer.appendChild(hint);
+      viewer.addEventListener('click', function () { viewer.remove(); });
+      overlay.appendChild(viewer);
+    }
+
+    function renderAttachment(m, bubble) {
+      var pure = window.V19Pure || {};
+      var kind = pure.attachmentKind ? pure.attachmentKind(m.attachment_mime) : null;
+      if (m.attachment_path && kind === 'image') {
+        var img = document.createElement('img');
+        img.className = 'chat-att-img';
+        img.alt = m.attachment_name || '添付画像';
+        img.addEventListener('click', function () {
+          attachmentUrl(m.message_id).then(openImageViewer).catch(function (e) {
+            UI().toast(friendlyError(e));
+          });
+        });
+        attachmentUrl(m.message_id).then(function (u) { img.src = u; }).catch(function () {
+          img.alt = '画像を表示できませんでした';
+        });
+        bubble.appendChild(img);
+        return;
+      }
+      if (m.attachment_path && kind === 'pdf') {
+        var card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'chat-att-card';
+        var nm = document.createElement('span');
+        nm.textContent = '📎 ' + (m.attachment_name || 'ファイル');
+        card.appendChild(nm);
+        var sz = document.createElement('span');
+        sz.className = 'chat-att-size';
+        sz.textContent = pure.formatFileSize ? pure.formatFileSize(m.attachment_size) : '';
+        card.appendChild(sz);
+        card.addEventListener('click', function () {
+          attachmentUrl(m.message_id).then(function (u) {
+            window.open(u, '_blank');
+          }).catch(function (e) {
+            UI().toast(friendlyError(e));
+          });
+        });
+        bubble.appendChild(card);
+        return;
+      }
+      if (!m.attachment_path && m.attachment_name) {
+        var exp = document.createElement('div');
+        exp.className = 'chat-att-expired';
+        exp.textContent = '添付ファイルは保存期間（1か月）を過ぎたため削除されました';
+        bubble.appendChild(exp);
+      }
+    }
+
+    // --- リアクション明細 (誰が押したか) --------------------------------
+    function attachLongPress(el, fn) {
+      var t = null;
+      el.addEventListener('pointerdown', function () {
+        t = window.setTimeout(function () {
+          lastLongPressAt = Date.now();
+          fn();
+        }, 450);
+      });
+      ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) {
+        el.addEventListener(ev, function () {
+          if (t) { window.clearTimeout(t); t = null; }
+        });
+      });
+      el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    }
+
+    async function openWhoSheet(messageId) {
+      var sheet = document.createElement('div');
+      sheet.className = 'chat-who-backdrop';
+      var panel = document.createElement('div');
+      panel.className = 'chat-who-panel';
+      var headRow = document.createElement('div');
+      headRow.className = 'chat-who-head';
+      var hTitle = document.createElement('div');
+      hTitle.className = 'chat-who-title';
+      hTitle.textContent = 'リアクションした人';
+      headRow.appendChild(hTitle);
+      var closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'btn btn-ghost btn-small';
+      closeBtn.textContent = '閉じる';
+      headRow.appendChild(closeBtn);
+      panel.appendChild(headRow);
+      var bodyEl = document.createElement('div');
+      bodyEl.className = 'chat-who-body';
+      bodyEl.textContent = '読み込み中…';
+      panel.appendChild(bodyEl);
+      sheet.appendChild(panel);
+      overlay.appendChild(sheet);
+      function closeSheet() { sheet.remove(); }
+      closeBtn.addEventListener('click', closeSheet);
+      sheet.addEventListener('click', function (e) {
+        if (e.target === sheet) { closeSheet(); }
+      });
+      try {
+        var rows = mode === 'admin'
+          ? await Api().adminListMessageReactions(messageId)
+          : await Api().listMessageReactions(messageId);
+        bodyEl.innerHTML = '';
+        var list = Array.isArray(rows) ? rows : [];
+        if (list.length === 0) {
+          bodyEl.textContent = 'まだリアクションはありません。';
+          return;
+        }
+        var groups = [];
+        var byKey = {};
+        list.forEach(function (r) {
+          if (!byKey[r.reaction]) {
+            byKey[r.reaction] = [];
+            groups.push(r.reaction);
+          }
+          byKey[r.reaction].push(r.member_name || '');
+        });
+        groups.forEach(function (key) {
+          var g = document.createElement('div');
+          g.className = 'chat-who-group';
+          var icon = document.createElement('span');
+          icon.className = 'chat-who-icon';
+          icon.appendChild(reactionContent(reactionDef(key)));
+          g.appendChild(icon);
+          var names = document.createElement('span');
+          names.className = 'chat-who-names';
+          names.textContent = byKey[key].join('、');
+          g.appendChild(names);
+          bodyEl.appendChild(g);
+        });
+      } catch (e) {
+        bodyEl.textContent = '';
+        var errP = document.createElement('p');
+        errP.className = 'danger-text';
+        errP.textContent = friendlyError(e);
+        bodyEl.appendChild(errP);
+      }
     }
 
     function renderMessage(m, prepend) {
@@ -283,7 +547,12 @@
       }
       var bubble = document.createElement('div');
       bubble.className = 'chat-bubble';
-      bubble.textContent = m.message || '';
+      if (m.attachment_path || m.attachment_name) { renderAttachment(m, bubble); }
+      if (m.message) {
+        var txt = document.createElement('div');
+        txt.textContent = m.message;
+        bubble.appendChild(txt);
+      }
       row.appendChild(bubble);
       var meta = document.createElement('div');
       meta.className = 'chat-meta';
@@ -436,6 +705,39 @@
 
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
+      var text = ta.value.trim();
+      if (pendingFile) {
+        if (text.length > 1000) {
+          UI().toast('1000文字以内で入力してください。');
+          return;
+        }
+        sendBtn.disabled = true;
+        attachBtn.disabled = true;
+        try {
+          var prep = await prepareUpload(pendingFile);
+          var pure = window.V19Pure || {};
+          if (pure.validateAttachment) {
+            var chk = pure.validateAttachment(prep.blob.type || pendingFile.type, prep.blob.size);
+            if (!chk.ok) { throw new Error(chk.error); }
+          }
+          var up = await Api().uploadChatAttachment(mode, practiceId, prep.blob, prep.name);
+          var att = { path: up.path, name: up.name || prep.name, mime: up.mime, size: up.size };
+          if (mode === 'admin') {
+            await Api().adminPostPracticeMessageAttachment(practiceId, text, att);
+          } else {
+            await Api().postPracticeMessageAttachment(practiceId, text, att);
+          }
+          ta.value = '';
+          clearPendingFile();
+          await poll();
+          scrollBottom();
+        } catch (ex) {
+          UI().toast('送信に失敗しました。' + friendlyError(ex));
+        }
+        sendBtn.disabled = false;
+        attachBtn.disabled = false;
+        return;
+      }
       var v = window.V19Pure && window.V19Pure.validateChatMessage
         ? window.V19Pure.validateChatMessage(ta.value)
         : { ok: true };
