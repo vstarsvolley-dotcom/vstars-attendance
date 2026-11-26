@@ -1,6 +1,6 @@
 /* Vstars 出欠 — 管理アプリ: ルーティングと共通部品
  * ルート: #/admin (ダッシュボード) #/admin/practices #/admin/members
- *        #/admin/requests #/admin/withdrawals #/admin/reports
+ *        #/admin/uniforms #/admin/requests #/admin/withdrawals #/admin/reports
  * 未ログインなら管理者ログイン画面を出す。管理者も同じ URL/アプリを使う。
  */
 'use strict';
@@ -18,6 +18,7 @@
       ['#/admin', 'dashboard', 'ダッシュボード'],
       ['#/admin/practices', 'practices', '練習管理'],
       ['#/admin/members', 'members', 'メンバー管理'],
+      ['#/admin/uniforms', 'uniforms', 'ユニフォーム管理'],
       ['#/admin/requests', 'requests', '登録申請'],
       ['#/admin/withdrawals', 'withdrawals', '退会候補'],
       ['#/admin/attendance', 'attendance', '出席率'],
@@ -95,6 +96,13 @@
         break;
       case 'members':
         window.VstarsAdminMembers.renderAdminMembers();
+        break;
+      case 'uniforms':
+        if (window.VstarsAdminUniforms && window.VstarsAdminUniforms.renderAdminUniforms) {
+          window.VstarsAdminUniforms.renderAdminUniforms();
+        } else {
+          window.location.hash = '#/admin';
+        }
         break;
       case 'requests':
         window.VstarsAdminMembers.renderRegistrationRequests();

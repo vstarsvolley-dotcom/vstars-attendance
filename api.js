@@ -426,6 +426,43 @@
     adminSetUniformPurchased: function (memberNo, purchased) {
       return callRpc('admin_set_uniform_purchased', { p_member_no: memberNo, p_purchased: !!purchased });
     },
+    // ユニフォーム管理 (SQL 36)。u は {id, kind, number, size, printName,
+    // holderMemberId, holderName, paid, note} (id 省略/null で新規)。
+    adminListUniforms: function () { return callRpc('admin_list_uniforms', {}); },
+    // 持ち主・借り手セレクト用の名簿 (id 付き、現役のみ)。
+    adminMemberOptions: function () { return callRpc('admin_member_options', {}); },
+    adminSaveUniform: function (u) {
+      u = u || {};
+      return callRpc('admin_save_uniform', {
+        p_id: u.id || null,
+        p_kind: u.kind,
+        p_number: u.number,
+        p_size: u.size,
+        p_print_name: u.printName !== undefined ? u.printName : null,
+        p_holder_member_id: u.holderMemberId || null,
+        p_holder_name: u.holderName !== undefined ? u.holderName : null,
+        p_paid: u.paid !== undefined && u.paid !== null ? !!u.paid : null,
+        p_note: u.note !== undefined ? u.note : null
+      });
+    },
+    adminDeleteUniform: function (id) {
+      return callRpc('admin_delete_uniform', { p_id: id });
+    },
+    adminSetUniformPaid: function (id, paid) {
+      return callRpc('admin_set_uniform_paid', { p_id: id, p_paid: !!paid });
+    },
+    adminLendUniform: function (uniformId, borrower) {
+      borrower = borrower || {};
+      return callRpc('admin_lend_uniform', {
+        p_uniform_id: uniformId,
+        p_borrower_member_id: borrower.memberId || null,
+        p_borrower_name: borrower.name !== undefined ? borrower.name : null,
+        p_note: borrower.note !== undefined ? borrower.note : null
+      });
+    },
+    adminReturnUniform: function (uniformId) {
+      return callRpc('admin_return_uniform', { p_uniform_id: uniformId });
+    },
     adminUpdateMember: function (memberNo, m) {
       return callRpc('admin_update_member', {
         p_member_no: memberNo, p_real_name: m.realName, p_line_name: m.lineName,

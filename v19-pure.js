@@ -313,6 +313,11 @@
     revoke_admin: '管理者権限を剥奪',
     revoke_devices: 'デバイスを無効化',
     save_teams: 'チーム分けを保存',
+    save_uniform: 'ユニフォームを保存',
+    delete_uniform: 'ユニフォームを削除',
+    set_uniform_paid: 'ユニフォーム支払いを変更',
+    lend_uniform: 'ユニフォームを貸出',
+    return_uniform: 'ユニフォームを返却',
     send_announcement: 'お知らせを送信',
     set_attendance: '出欠を入力',
     set_initial_pin: '初期PINを設定',
@@ -390,6 +395,45 @@
     });
   }
 
+  // ユニフォーム管理 (SQL 36) の表示ラベル (純粋関数)。
+  // u は admin_list_uniforms の行 (snake_case) を想定する。
+  // 持ち主: メンバー → LINE名（No.）、外部 → holder_name、両方なし → '在庫'。
+  function uniformHolderLabel(u) {
+    if (!u) { return '在庫'; }
+    if (u.holder_member_id) {
+      var name = u.holder_line_name || u.holder_name || 'メンバー';
+      if (u.holder_member_no !== null && u.holder_member_no !== undefined) {
+        return name + '（No.' + u.holder_member_no + '）';
+      }
+      return name;
+    }
+    if (u.holder_name) { return String(u.holder_name); }
+    return '在庫';
+  }
+
+  function uniformHasHolder(u) {
+    return !!(u && (u.holder_member_id || u.holder_name));
+  }
+
+  // 支払いラベル: 持ち主なしは '―' (対象外)、ありは 済/未。
+  function uniformPaidLabel(u) {
+    if (!uniformHasHolder(u)) { return '―'; }
+    return u.paid ? '支払い済' : '未払い';
+  }
+
+  // 未払い件数を種類別に数える。持ち主がいて paid !== true の行だけが対象。
+  function uniformUnpaidCounts(rows) {
+    var counts = { first: 0, second: 0, total: 0 };
+    (Array.isArray(rows) ? rows : []).forEach(function (u) {
+      if (!uniformHasHolder(u) || u.paid) { return; }
+      if (u.kind === 'first') { counts.first += 1; }
+      else if (u.kind === 'second') { counts.second += 1; }
+      else { return; }
+      counts.total += 1;
+    });
+    return counts;
+  }
+
   return {
     splitTeams: splitTeams,
     validateAnnouncementMessage: validateAnnouncementMessage,
@@ -398,6 +442,10 @@
     statsPeriodRange: statsPeriodRange,
     practiceCounts: practiceCounts,
     filterInviteCandidates: filterInviteCandidates,
+    uniformHolderLabel: uniformHolderLabel,
+    uniformHasHolder: uniformHasHolder,
+    uniformPaidLabel: uniformPaidLabel,
+    uniformUnpaidCounts: uniformUnpaidCounts,
     auditActionLabel: auditActionLabel,
     auditDetailText: auditDetailText,
     AUDIT_ACTION_LABELS: AUDIT_ACTION_LABELS
