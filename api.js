@@ -467,6 +467,19 @@
         body: JSON.stringify({ message_id: messageId })
       });
     },
+    // チャット未読バッジ (SQL 40)。
+    getChatUnread: function () {
+      return callRpc('get_chat_unread', { p_token: getToken() });
+    },
+    markChatRead: function (practiceId) {
+      return callRpc('mark_chat_read', { p_token: getToken(), p_practice_id: practiceId });
+    },
+    adminGetChatUnread: function () {
+      return callRpc('admin_get_chat_unread', {});
+    },
+    adminMarkChatRead: function (practiceId) {
+      return callRpc('admin_mark_chat_read', { p_practice_id: practiceId });
+    },
     // 運営からのお知らせ欄 (SQL 28)。プッシュなし・アプリ内表示のみ。
     listNotices: function () { return callRpc('list_notices', { p_token: getToken() }); },
     adminListNotices: function () { return callRpc('admin_list_notices', {}); },

@@ -178,12 +178,27 @@
     var attUrlCache = {};       // message_id -> Promise<string> (署名URL)
     var lastLongPressAt = 0;    // 長押し直後の click を抑止するため
 
+    // 既読化 (SQL 40): 開いた時点と閉じた時点の両方で呼ぶ。失敗しても
+    // チャット自体は止めない (バッジが残るだけ)。
+    function markRead() {
+      try {
+        var p = mode === 'admin'
+          ? Api().adminMarkChatRead(practiceId)
+          : Api().markChatRead(practiceId);
+        if (p && p.catch) { p.catch(function () {}); }
+      } catch (e) {}
+    }
+
     function close() {
       if (closed) { return; }
       closed = true;
+      markRead();
       if (timer) { window.clearInterval(timer); }
       window.removeEventListener('hashchange', onHash);
       overlay.remove();
+      try {
+        window.dispatchEvent(new CustomEvent('vstars-chat-closed', { detail: { practiceId: practiceId } }));
+      } catch (e) {}
       document.body.style.overflow = '';
       if (currentClose === close) { currentClose = null; }
       // ディープリンク (#/practice/<id>/chat) のまま閉じると、一覧の
@@ -627,6 +642,7 @@
         }
         olderBtn.hidden = list.length < 100;
         scrollBottom();
+        markRead();
       } catch (e) {
         listEl.innerHTML = '';
         var p = document.createElement('p');

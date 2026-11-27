@@ -592,8 +592,9 @@
       addBtn('招待管理', 'btn-ghost', function () { showInvitations(p, detail, wrap); });
     }
     // チャット (SQL 29): 試合・大会のみ。管理者も参加・投稿できる。
+    // 未読バッジ (SQL 40): 取得できたらボタンに後付けする。
     if (UI().isMatchOrTournament(p)) {
-      addBtn('チャット', 'btn-ghost', function () {
+      var chatBtn = addBtn('チャット', 'btn-ghost', function () {
         if (window.VstarsChat) {
           window.VstarsChat.open({
             practiceId: pid(p), mode: 'admin',
@@ -601,6 +602,19 @@
           });
         }
       });
+      Api().adminGetChatUnread().then(function (rows) {
+        var mine = (Array.isArray(rows) ? rows : []).filter(function (r) {
+          return String(r.practice_id) === String(pid(p));
+        });
+        var label = (window.V19Pure && window.V19Pure.formatUnreadCount && mine.length)
+          ? window.V19Pure.formatUnreadCount(mine[0].unread_count) : '';
+        if (label && chatBtn.isConnected) {
+          var badge = document.createElement('span');
+          badge.className = 'chat-unread-badge';
+          badge.textContent = label;
+          chatBtn.appendChild(badge);
+        }
+      }).catch(function () {});
     }
     if (p.is_cancelled) {
       addBtn('復旧', 'btn-ghost', async function () {

@@ -232,6 +232,13 @@
     if (n < 1024 * 1024) { return Math.round(n / 1024) + ' KB'; }
     return (Math.round(n / (1024 * 1024) * 10) / 10) + ' MB';
   }
+  // 未読バッジの表示文字列 (SQL 40)。0以下はバッジ自体を出さない想定で ''。
+  function formatUnreadCount(n) {
+    var c = Math.floor(Number(n) || 0);
+    if (c <= 0) { return ''; }
+    if (c > 99) { return '99+'; }
+    return String(c);
+  }
 
   // 前日リマインドの対象抽出 (純粋関数)。
   // practices: [{id, practiceDate, status}]
@@ -466,6 +473,7 @@
     attachmentKind: attachmentKind,
     validateAttachment: validateAttachment,
     formatFileSize: formatFileSize,
+    formatUnreadCount: formatUnreadCount,
     filterReminderTargets: filterReminderTargets,
     statsPeriodRange: statsPeriodRange,
     practiceCounts: practiceCounts,

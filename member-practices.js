@@ -17,6 +17,19 @@
 
   function practiceId(p) { return String(p.practice_id || p.id || ''); }
 
+  // チャット未読件数 (SQL 40): practice_id -> 件数。取得に失敗したら
+  // バッジなしで一覧を出す (一覧自体は止めない)。
+  var unreadMap = {};
+  function refreshUnread() {
+    return Api().getChatUnread().then(function (rows) {
+      var map = {};
+      (Array.isArray(rows) ? rows : []).forEach(function (r) {
+        map[String(r.practice_id)] = r.unread_count;
+      });
+      unreadMap = map;
+    }).catch(function () { unreadMap = {}; });
+  }
+
   function updateBulkBar() {
     var bar = document.getElementById('bulk-bar');
     var countEl = document.getElementById('bulk-count');
@@ -44,6 +57,7 @@
         var kb = String(b.practice_date || '') + ' ' + String(b.start_time || '');
         return tab === 'past' ? kb.localeCompare(ka) : ka.localeCompare(kb);
       });
+      return refreshUnread().then(function () {
       drawList(view);
       window.VstarsMemberApp.refreshBanner();
       // プッシュ通知からのディープリンク: #/practice/<id>/chat なら
@@ -59,6 +73,7 @@
             : 'チャット'
         });
       }
+      });
     }).catch(function (e) {
       UI().showError(view, '練習を読み込めませんでした。' + (e && e.message ? ' ' + e.message : ''), renderPractices);
     });
@@ -277,6 +292,7 @@
       // 過去タブは申込・キャンセル・まとめ申し込みを出さない (カード側でも
       // 過去分は申込ボタンを出さない)。参加者表示と動画リンクは出る。
       var card = UI().renderPracticeCard(p, tab === 'past' ? {
+        chatUnread: unreadMap[practiceId(p)] || 0,
         onRoster: function (pr) { showRoster(pr); },
         onChat: function (pr) {
           if (window.VstarsChat) {
@@ -287,6 +303,7 @@
           }
         }
       } : {
+        chatUnread: unreadMap[practiceId(p)] || 0,
         selected: selected,
         onToggleSelect: function (id, checked) {
           if (checked) { selected.add(String(id)); } else { selected.delete(String(id)); }
@@ -482,6 +499,14 @@
       body.appendChild(err);
     }
   }
+
+  // チャットを閉じたら未読バッジを最新化する (chat.js が発火)。
+  window.addEventListener('vstars-chat-closed', function () {
+    var view = viewEl();
+    if (view && view.querySelector('.practice-list')) {
+      refreshUnread().then(function () { drawList(view); });
+    }
+  });
 
   window.VstarsMemberPractices = {
     renderPractices: renderPractices,
