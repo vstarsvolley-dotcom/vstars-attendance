@@ -535,6 +535,82 @@
       }
     }
 
+    // --- 既読確認 (管理者送信メッセージのみ, SQL 41) ---------------------
+    async function openReadersSheet(messageId) {
+      var sheet = document.createElement('div');
+      sheet.className = 'chat-who-backdrop';
+      var panel = document.createElement('div');
+      panel.className = 'chat-who-panel';
+      var headRow = document.createElement('div');
+      headRow.className = 'chat-who-head';
+      var hTitle = document.createElement('div');
+      hTitle.className = 'chat-who-title';
+      hTitle.textContent = '既読の確認';
+      headRow.appendChild(hTitle);
+      var closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'btn btn-ghost btn-small';
+      closeBtn.textContent = '閉じる';
+      headRow.appendChild(closeBtn);
+      panel.appendChild(headRow);
+      var bodyEl = document.createElement('div');
+      bodyEl.className = 'chat-who-body';
+      bodyEl.textContent = '読み込み中…';
+      panel.appendChild(bodyEl);
+      sheet.appendChild(panel);
+      overlay.appendChild(sheet);
+      function closeSheet() { sheet.remove(); }
+      closeBtn.addEventListener('click', closeSheet);
+      sheet.addEventListener('click', function (e) {
+        if (e.target === sheet) { closeSheet(); }
+      });
+      try {
+        var rows = await Api().adminListMessageReaders(practiceId, messageId);
+        var list = Array.isArray(rows) ? rows : [];
+        bodyEl.innerHTML = '';
+        if (list.length === 0) {
+          bodyEl.textContent = '対象の参加者がいません。';
+          return;
+        }
+        var readNames = [];
+        var unreadNames = [];
+        list.forEach(function (r) {
+          if (r.has_read) { readNames.push(r.member_name || ''); }
+          else { unreadNames.push(r.member_name || ''); }
+        });
+        function addGroup(label, cls, names) {
+          var g = document.createElement('div');
+          g.className = 'chat-who-group';
+          var state = document.createElement('span');
+          state.className = 'chat-read-state ' + cls;
+          state.textContent = label;
+          g.appendChild(state);
+          var namesEl = document.createElement('span');
+          namesEl.className = 'chat-who-names';
+          namesEl.textContent = names.join('、');
+          g.appendChild(namesEl);
+          bodyEl.appendChild(g);
+        }
+        if (readNames.length > 0) {
+          addGroup('既読 ' + readNames.length + '人', 'read', readNames);
+        } else {
+          var none = document.createElement('p');
+          none.className = 'muted';
+          none.textContent = 'まだ誰も読んでいません。';
+          bodyEl.appendChild(none);
+        }
+        if (unreadNames.length > 0) {
+          addGroup('未読 ' + unreadNames.length + '人', 'unread', unreadNames);
+        }
+      } catch (e) {
+        bodyEl.textContent = '';
+        var errP = document.createElement('p');
+        errP.className = 'danger-text';
+        errP.textContent = friendlyError(e);
+        bodyEl.appendChild(errP);
+      }
+    }
+
     function renderMessage(m, prepend) {
       if (seen.has(m.message_id)) { return null; }
       seen.add(m.message_id);
@@ -604,6 +680,15 @@
           }
         });
         meta.appendChild(del);
+        if (m.sender_is_admin) {
+          var readBtn = document.createElement('button');
+          readBtn.type = 'button';
+          readBtn.className = 'chat-read-btn';
+          readBtn.textContent = '既読';
+          readBtn.setAttribute('aria-label', '既読を確認');
+          readBtn.addEventListener('click', function () { openReadersSheet(m.message_id); });
+          meta.appendChild(readBtn);
+        }
       }
       row.appendChild(meta);
       var rwrap = document.createElement('div');

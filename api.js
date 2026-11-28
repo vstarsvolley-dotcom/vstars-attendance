@@ -406,6 +406,12 @@
     adminListMessageReactions: function (messageId) {
       return callRpc('admin_list_message_reactions', { p_message_id: messageId });
     },
+    // 既読確認 (SQL 41): 管理者送信メッセージの既読/未読一覧。
+    adminListMessageReaders: function (practiceId, messageId) {
+      return callRpc('admin_list_message_readers', {
+        p_practice_id: practiceId, p_message_id: messageId
+      });
+    },
     postPracticeMessageAttachment: function (practiceId, message, att) {
       return callRpc('post_practice_message_attachment', {
         p_token: getToken(), p_practice_id: practiceId, p_message: message || '',

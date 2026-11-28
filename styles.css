@@ -511,6 +511,10 @@ table.data tr:last-child td { border-bottom: none; }
 .chat-row.mine .chat-bubble { background: var(--navy); border-color: var(--navy); color: var(--white); }
 .chat-meta { font-size: 11px; color: var(--grey); margin-top: 2px; display: flex; gap: 8px; align-items: center; }
 .chat-del { background: none; border: none; color: var(--danger); font-size: 11px; cursor: pointer; padding: 0; }
+.chat-read-btn { background: none; border: none; color: var(--navy); font-size: 11px; cursor: pointer; padding: 0; text-decoration: underline; }
+.chat-read-state { font-size: 12px; font-weight: 700; flex-shrink: 0; padding: 2px 8px; border-radius: 999px; }
+.chat-read-state.read { background: #DCF2E3; color: var(--green); }
+.chat-read-state.unread { background: var(--bg); color: var(--grey); border: 1px solid var(--line); }
 /* リアクション (SQL 33) */
 .chat-react-btn {
   background: var(--white); border: 1px solid var(--line); color: var(--grey);
